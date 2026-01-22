@@ -1,7 +1,6 @@
 package initial
 
 import (
-	"fmt"
 	"go-chat/global"
 
 	"github.com/spf13/viper"
@@ -16,14 +15,8 @@ func InitConfig() {
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		global.Log.Fatal("Fatal error config file", zap.Error(err))
 	}
 	global.Config = viper.GetViper()
-	fmt.Println("Config loaded successfully")
-}
-
-// InitLogger 简单的日志初始化 (后续我们会优化)
-func InitLogger() {
-	logger, _ := zap.NewDevelopment()
-	global.Log = logger
+	global.Log.Info("Config loaded successfully")
 }

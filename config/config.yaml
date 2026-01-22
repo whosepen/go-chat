@@ -13,3 +13,13 @@ redis:
 jwt:
   secret: "a1a5d130a37dd2faa43d647e2b1d9d994b5f47eba1a0a619c73a6cacd437faf0"
   expire: 72 # Token valid period 72 hours
+
+kafka:
+  addr: ["localhost:9092"] # 数组，生产环境通常是集群
+  topic: 
+    chat: "chat_message"
+    retry: "chat_message_retry"
+    dead: "chat_message_dead_letter"
+  consumer_group: "chat_group"
+  ack: "all" # all, 0, 1
+  retry: 3

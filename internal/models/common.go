@@ -12,3 +12,7 @@ type Model struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // 软删除，前端不可见
 }
+
+type ModelInterface interface { // models结构体指针
+	TableName() string
+}

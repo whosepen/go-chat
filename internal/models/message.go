@@ -10,6 +10,6 @@ type Message struct {
 	Media      int    `json:"media"`                     // 媒体类型: 1文本 2图片 3音频
 }
 
-func (Message) TableName() string {
+func (*Message) TableName() string {
 	return "messages"
 }

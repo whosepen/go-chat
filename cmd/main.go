@@ -5,6 +5,7 @@ import (
 	"go-chat/internal/models" // 引入 models
 	"go-chat/internal/pkg/initial"
 	"go-chat/internal/routers"
+	"go-chat/internal/service"
 )
 
 // @title GoChat API
@@ -13,10 +14,14 @@ import (
 // @host localhost:8080
 // @BasePath /api
 func main() {
-	initial.InitConfig()
 	initial.InitLogger()
+	initial.InitConfig()
+
 	initial.InitDB()
 	initial.InitRedis()
+	initial.InitKafka()
+
+	service.StartConsumer()
 
 	// 自动迁移 (Auto Migrate)
 	if err := global.DB.AutoMigrate(&models.User{}, &models.Message{}); err != nil {

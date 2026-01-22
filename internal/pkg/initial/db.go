@@ -1,19 +1,20 @@
 package initial
 
 import (
-	"fmt"
 	"go-chat/global"
 	"log"
 	"os"
 	"time"
 
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 func InitDB() {
-	dsn := global.Config.GetString("mysql.dsn")
+	dsn := viper.GetString("mysql.dsn")
 	if dsn == "" {
 		panic("mysql dsn is empty")
 	}
@@ -27,7 +28,7 @@ func InitDB() {
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: newLogger})
 	if err != nil {
-		panic(fmt.Errorf("connect mysql failed: %s", err))
+		global.Log.Fatal("connect mysql failed", zap.Error(err))
 	}
 
 	sqlDB, _ := db.DB()

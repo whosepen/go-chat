@@ -1,14 +1,13 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/protocol"
 	"sync"
-	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -129,35 +128,30 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Media:      1,
 	}
 
-	if err := global.DB.Create(&dbMsg).Error; err != nil {
-		global.Log.Error("save message failed", zap.Error(err))
-		return
+	// 序列化消息
+	msgBytes, _ := json.Marshal(dbMsg)
+
+	// 投递到 Kafka
+	kafkaMsg := &sarama.ProducerMessage{
+		Topic: global.KTopic.ChatMsg,
+		Value: sarama.ByteEncoder(msgBytes),
 	}
+	global.KafkaProducer.SendMessage(kafkaMsg)
+}
 
-	key := generateKey(dbMsg.ToUserID, dbMsg.FromUserID)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel() // 设置缓存删除timeout
-
-	if err := global.RDB.Del(ctx, key).Err(); err != nil {
-		// 缓存删除失败只记录日志，不影响消息发送流程
-		global.Log.Error("redis del failed", zap.Error(err))
-	}
-
+func PushMessageToUser(msg models.Message) {
 	Manager.Lock.RLock()
-	targetClient, ok := Manager.Clients[msg.TargetID]
+	targetClient, ok := Manager.Clients[msg.ToUserID]
 	Manager.Lock.RUnlock()
 
 	if ok {
 		reply := protocol.Reply{
-			FromID:   c.UserID,
+			FromID:   msg.FromUserID,
 			Content:  msg.Content,
-			Type:     protocol.TypeSingleMsg,
-			SendTime: time.Now().Unix(),
+			Type:     protocol.TypeSingleMsg, // 或者 msg.Type
+			SendTime: msg.CreatedAt.Unix(),   // 使用 DB 里的真实落库时间
 		}
-
 		replyBytes, _ := json.Marshal(reply)
 		targetClient.Send <- replyBytes
 	}
-
 }

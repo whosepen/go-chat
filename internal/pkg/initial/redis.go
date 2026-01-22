@@ -2,16 +2,17 @@ package initial
 
 import (
 	"context"
-	"fmt"
 	"go-chat/global"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func InitRedis() {
-	addr := global.Config.GetString("redis.addr")
-	password := global.Config.GetString("redis.password")
-	db := global.Config.GetInt("redis.db")
+	addr := viper.GetString("redis.addr")
+	password := viper.GetString("redis.password")
+	db := viper.GetInt("redis.db")
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -23,7 +24,7 @@ func InitRedis() {
 	ctx := context.Background()
 	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		panic(fmt.Sprintf("redis connect failed: %s", err))
+		global.Log.Fatal("redis connect failed", zap.Error(err))
 	}
 
 	global.RDB = rdb
