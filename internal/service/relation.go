@@ -159,15 +159,7 @@ func GetPendingRequests(ctx context.Context, userID uint) ([]FriendRequestDTO, e
 	return dtos, nil
 }
 
-func toUserDTO(u models.User) UserResponseDTO {
-	return UserResponseDTO{
-		ID:       u.ID,
-		Username: u.Username,
-		Nickname: u.Nickname,
-		Avatar:   u.Avatar,
-	}
-}
-
+// SearchUserByUsername 根据用户名搜索用户
 func SearchUserByUsername(ctx context.Context, username string) (*UserResponseDTO, error) {
 	var user models.User
 	err := global.DB.WithContext(ctx).
@@ -175,11 +167,10 @@ func SearchUserByUsername(ctx context.Context, username string) (*UserResponseDT
 		First(&user).Error
 
 	if err != nil {
-		// 这里可以判断如果是 gorm.ErrRecordNotFound 则返回自定义的“用户不存在”错误
 		return nil, errors.New("用户不存在")
 	}
 
-	dto := toUserDTO(user)
+	dto := ToUserDTO(user)
 
 	return &dto, nil
 }
@@ -205,7 +196,7 @@ func GetFriendList(ctx context.Context, userID uint) ([]UserResponseDTO, error) 
 
 	dtos := make([]UserResponseDTO, 0, len(friends))
 	for _, f := range friends {
-		dtos = append(dtos, toUserDTO(f))
+		dtos = append(dtos, ToUserDTO(f))
 	}
 
 	return dtos, nil

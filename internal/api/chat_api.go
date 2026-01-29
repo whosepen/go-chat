@@ -18,6 +18,14 @@ var upgrader = websocket.Upgrader{
 }
 
 // Connect WebSocket
+// @Summary 建立WebSocket连接
+// @Description 用户通过JWT Token建立WebSocket实时通信连接
+// @Tags 聊天模块
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 101 {string} string "切换协议到WebSocket"
+// @Router /ws [get]
 func (api *ChatApi) Connect(c *gin.Context) {
 
 	userIDRaw, exists := c.Get("userID")
@@ -62,9 +70,14 @@ func (api *ChatApi) Connect(c *gin.Context) {
 }
 
 // GetHistory 获取聊天历史记录
-// @Summary 获取聊天历史
+// @Summary 获取聊天历史记录
+// @Description 获取与指定用户的聊天历史记录，支持分页和缓存
 // @Tags 聊天模块
-// @Param target_id query int true "对方ID"
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param target_id query int true "对方用户ID"
+// @Success 200 {object} utils.Response{data=[]service.MessageDTO}
 // @Router /chat/history [get]
 func (api *ChatApi) GetHistory(c *gin.Context) {
 	v, exists := c.Get("userID")

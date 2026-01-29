@@ -6,6 +6,9 @@
 .vscode/
 .idea/
 /logs/
+*.logs
 vendor/
 .claude/
+CLAUDE.md
 /data/
+/markdown/

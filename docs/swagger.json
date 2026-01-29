@@ -1,89 +1,301 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "这是一个 Go 语言开发的即时通讯系统后端 API 文档",
+        "description": "即时通讯系统后端 API 文档 - 支持用户认证、好友管理、实时消息功能",
         "title": "GoChat API",
         "contact": {},
         "version": "1.0"
     },
     "host": "localhost:8080",
     "basePath": "/api",
+    "schemes": ["http", "https"],
     "paths": {
-        "/user/login": {
+        "/user/register": {
             "post": {
-                "description": "用户通过账号密码登录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户模块"
-                ],
-                "summary": "用户登录",
-                "parameters": [
-                    {
-                        "description": "登录参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.LoginRequest"
-                        }
+                "description": "用户通过账号密码注册",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["用户模块"],
+                "summary": "用户注册",
+                "parameters": [{
+                    "description": "注册参数",
+                    "name": "request",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "$ref": "#/definitions/api.RegisterRequest"
                     }
-                ],
+                }],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/api.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/service.LoginResponseDTO"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/utils.Response"
                         }
                     }
                 }
             }
         },
-        "/user/register": {
+        "/user/login": {
             "post": {
-                "description": "用户通过账号密码注册",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户模块"
-                ],
-                "summary": "用户注册",
-                "parameters": [
-                    {
-                        "description": "注册参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.RegisterRequest"
-                        }
+                "description": "用户通过账号密码登录",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["用户模块"],
+                "summary": "用户登录",
+                "parameters": [{
+                    "description": "登录参数",
+                    "name": "request",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "$ref": "#/definitions/api.LoginRequest"
                     }
-                ],
+                }],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/api.Response"
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "$ref": "#/definitions/service.LoginResponseDTO"
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        },
+        "/user/info": {
+            "get": {
+                "description": "获取当前登录用户的详细信息",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["用户模块"],
+                "summary": "获取当前用户信息",
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "$ref": "#/definitions/api.UserInfoResponse"
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        },
+        "/user/search": {
+            "get": {
+                "description": "通过用户名精确搜索其他用户",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["用户模块"],
+                "summary": "根据用户名搜索用户",
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "username",
+                    "in": "query",
+                    "required": true,
+                    "type": "string",
+                    "description": "用户名"
+                }],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "$ref": "#/definitions/service.UserResponseDTO"
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        },
+        "/ws": {
+            "get": {
+                "description": "用户通过JWT Token建立WebSocket实时通信连接",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["聊天模块"],
+                "summary": "建立WebSocket连接",
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "101": {
+                        "description": "切换协议到WebSocket",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/chat/history": {
+            "get": {
+                "description": "获取与指定用户的聊天历史记录，支持分页和缓存",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["聊天模块"],
+                "summary": "获取聊天历史记录",
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "name": "target_id",
+                    "in": "query",
+                    "required": true,
+                    "type": "integer",
+                    "description": "对方用户ID"
+                }],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/definitions/service.MessageDTO"
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/request": {
+            "post": {
+                "description": "向指定用户发送好友申请，支持附加备注",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["好友模块"],
+                "summary": "发送好友申请",
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "description": "好友申请参数",
+                    "name": "request",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "$ref": "#/definitions/service.SendFriendRequestReq"
+                    }
+                }],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/handle": {
+            "post": {
+                "description": "同意或拒绝收到的好友申请",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["好友模块"],
+                "summary": "处理好友申请",
+                "security": [{"ApiKeyAuth": []}],
+                "parameters": [{
+                    "description": "处理参数",
+                    "name": "request",
+                    "in": "body",
+                    "required": true,
+                    "schema": {
+                        "$ref": "#/definitions/service.HandleFriendRequestReq"
+                    }
+                }],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/list": {
+            "get": {
+                "description": "获取当前用户的所有好友列表",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["好友模块"],
+                "summary": "获取好友列表",
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/definitions/service.UserResponseDTO"
+                                        }
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/requests": {
+            "get": {
+                "description": "获取当前用户收到的待处理好友申请列表",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["好友模块"],
+                "summary": "获取待处理的好友申请",
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [{
+                                "$ref": "#/definitions/utils.Response"
+                            }, {
+                                "type": "object",
+                                "properties": {
+                                    "data": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/definitions/service.FriendRequestDTO"
+                                        }
+                                    }
+                                }
+                            }]
                         }
                     }
                 }
@@ -93,10 +305,7 @@
     "definitions": {
         "api.LoginRequest": {
             "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
+            "required": ["password", "username"],
             "properties": {
                 "password": {
                     "type": "string"
@@ -108,33 +317,58 @@
         },
         "api.RegisterRequest": {
             "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
+            "required": ["password", "username"],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "email"
                 },
                 "password": {
                     "type": "string",
                     "minLength": 6
                 },
                 "username": {
-                    "description": "TODO:add character limitation",
                     "type": "string"
                 }
             }
         },
-        "api.Response": {
+        "api.UserInfoResponse": {
             "type": "object",
             "properties": {
-                "code": {
+                "id": {
                     "type": "integer"
                 },
-                "data": {},
-                "msg": {
+                "username": {
                     "type": "string"
+                }
+            }
+        },
+        "service.SendFriendRequestReq": {
+            "type": "object",
+            "required": ["target_id"],
+            "properties": {
+                "remark": {
+                    "type": "string",
+                    "description": "申请附言"
+                },
+                "target_id": {
+                    "type": "integer",
+                    "description": "目标用户ID"
+                }
+            }
+        },
+        "service.HandleFriendRequestReq": {
+            "type": "object",
+            "required": ["request_id", "action"],
+            "properties": {
+                "action": {
+                    "type": "integer",
+                    "enum": [1, 2],
+                    "description": "1:同意 2:拒绝"
+                },
+                "request_id": {
+                    "type": "integer",
+                    "description": "申请记录ID"
                 }
             }
         },
@@ -151,6 +385,110 @@
                     "type": "string"
                 }
             }
+        },
+        "service.UserResponseDTO": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.MessageDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "创建时间戳"
+                },
+                "from_user_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "media": {
+                    "type": "integer",
+                    "description": "1:文本 2:图片 3:音频"
+                },
+                "to_user_id": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "integer",
+                    "description": "消息类型"
+                }
+            }
+        },
+        "service.FriendRequestDTO": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string",
+                    "description": "发送人头像"
+                },
+                "created_at": {
+                    "type": "string",
+                    "description": "时间"
+                },
+                "id": {
+                    "type": "integer",
+                    "description": "申请记录ID"
+                },
+                "remark": {
+                    "type": "string",
+                    "description": "附言"
+                },
+                "sender_id": {
+                    "type": "integer",
+                    "description": "发送人ID"
+                },
+                "sender_name": {
+                    "type": "string",
+                    "description": "发送人用户名"
+                },
+                "status": {
+                    "type": "integer",
+                    "description": "状态 0:待处理 1:已同意 2:已拒绝"
+                }
+            }
+        },
+        "utils.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "description": "状态码 0:成功 其他:失败"
+                },
+                "data": {
+                    "type": "object",
+                    "description": "响应数据"
+                },
+                "msg": {
+                    "type": "string",
+                    "description": "提示信息"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }

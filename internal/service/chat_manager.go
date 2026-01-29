@@ -115,7 +115,13 @@ func (c *Client) HandleMessage(msg protocol.Message) {
 		c.sendSingleMessage(msg)
 
 	case protocol.TypeHeartbeat:
+		// 心跳保活，不做处理
 
+	case protocol.TypeLogin:
+		// 登录/上线通知，目前已在连接时处理
+
+	default:
+		global.Log.Warn("unknown message type", zap.Int("type", msg.Type))
 	}
 }
 
@@ -129,14 +135,21 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 	}
 
 	// 序列化消息
-	msgBytes, _ := json.Marshal(dbMsg)
+	msgBytes, err := json.Marshal(dbMsg)
+	if err != nil {
+		global.Log.Error("marshal message failed", zap.Error(err))
+		return
+	}
 
 	// 投递到 Kafka
 	kafkaMsg := &sarama.ProducerMessage{
 		Topic: global.KTopic.ChatMsg,
 		Value: sarama.ByteEncoder(msgBytes),
 	}
-	global.KafkaProducer.SendMessage(kafkaMsg)
+	_, _, err = global.KafkaProducer.SendMessage(kafkaMsg)
+	if err != nil {
+		global.Log.Error("send message to kafka failed", zap.Error(err))
+	}
 }
 
 func PushMessageToUser(msg models.Message) {
@@ -148,10 +161,14 @@ func PushMessageToUser(msg models.Message) {
 		reply := protocol.Reply{
 			FromID:   msg.FromUserID,
 			Content:  msg.Content,
-			Type:     protocol.TypeSingleMsg, // 或者 msg.Type
-			SendTime: msg.CreatedAt.Unix(),   // 使用 DB 里的真实落库时间
+			Type:     protocol.TypeSingleMsg,
+			SendTime: msg.CreatedAt.Unix(),
 		}
-		replyBytes, _ := json.Marshal(reply)
+		replyBytes, err := json.Marshal(reply)
+		if err != nil {
+			global.Log.Error("marshal reply failed", zap.Error(err))
+			return
+		}
 		targetClient.Send <- replyBytes
 	}
 }

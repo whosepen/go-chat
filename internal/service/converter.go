@@ -4,7 +4,7 @@ import (
 	"go-chat/internal/models"
 )
 
-// ToMessageDTO将DB实体转换为DTO
+// ToMessageDTO 将DB实体转换为DTO
 // DATETIME转化为int64时间戳
 func ToMessageDTO(m *models.Message) MessageDTO {
 	return MessageDTO{
@@ -20,7 +20,6 @@ func ToMessageDTO(m *models.Message) MessageDTO {
 
 // ToMessageDTOs 批量转换
 func ToMessageDTOs(msgs []models.Message) []MessageDTO {
-	// 预分配切片容量，避免扩容带来的性能损耗
 	n := len(msgs)
 	if n == 0 {
 		return []MessageDTO{}
@@ -28,6 +27,29 @@ func ToMessageDTOs(msgs []models.Message) []MessageDTO {
 	dtos := make([]MessageDTO, n)
 	for i, m := range msgs {
 		dtos[n-1-i] = ToMessageDTO(&m)
+	}
+	return dtos
+}
+
+// ToUserDTO 将User实体转换为DTO
+func ToUserDTO(u models.User) UserResponseDTO {
+	return UserResponseDTO{
+		ID:       u.ID,
+		Username: u.Username,
+		Nickname: u.Nickname,
+		Avatar:   u.Avatar,
+	}
+}
+
+// ToUserDTOs 批量转换
+func ToUserDTOs(users []models.User) []UserResponseDTO {
+	n := len(users)
+	if n == 0 {
+		return []UserResponseDTO{}
+	}
+	dtos := make([]UserResponseDTO, n)
+	for i, u := range users {
+		dtos[i] = ToUserDTO(u)
 	}
 	return dtos
 }

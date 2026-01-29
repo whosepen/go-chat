@@ -13,24 +13,38 @@ definitions:
   api.RegisterRequest:
     properties:
       email:
+        format: email
         type: string
       password:
         minLength: 6
         type: string
       username:
-        description: TODO:add character limitation
         type: string
     required:
     - password
     - username
     type: object
-  api.Response:
+  api.UserInfoResponse:
     properties:
-      code:
+      id:
         type: integer
-      data: {}
-      msg:
+      username:
         type: string
+    type: object
+  service.HandleFriendRequestReq:
+    properties:
+      action:
+        description: 1:同意 2:拒绝
+        enum:
+        - 1
+        - 2
+        type: integer
+      request_id:
+        description: 申请记录ID
+        type: integer
+    required:
+    - request_id
+    - action
     type: object
   service.LoginResponseDTO:
     properties:
@@ -41,13 +55,240 @@ definitions:
       username:
         type: string
     type: object
+  service.MessageDTO:
+    properties:
+      content:
+        type: string
+      created_at:
+        description: 创建时间戳
+        format: int64
+        type: integer
+      from_user_id:
+        type: integer
+      id:
+        type: integer
+      media:
+        description: 1:文本 2:图片 3:音频
+        type: integer
+      to_user_id:
+        type: integer
+      type:
+        description: 消息类型
+        type: integer
+    type: object
+  service.SendFriendRequestReq:
+    properties:
+      remark:
+        description: 申请附言
+        type: string
+      target_id:
+        description: 目标用户ID
+        type: integer
+    required:
+    - target_id
+    type: object
+  service.UserResponseDTO:
+    properties:
+      avatar:
+        type: string
+      id:
+        type: integer
+      nickname:
+        type: string
+      username:
+        type: string
+    type: object
+  service.FriendRequestDTO:
+    properties:
+      avatar:
+        description: 发送人头像
+        type: string
+      created_at:
+        description: 时间
+        type: string
+      id:
+        description: 申请记录ID
+        type: integer
+      remark:
+        description: 附言
+        type: string
+      sender_id:
+        description: 发送人ID
+        type: integer
+      sender_name:
+        description: 发送人用户名
+        type: string
+      status:
+        description: 状态 0:待处理 1:已同意 2:已拒绝
+        type: integer
+    type: object
+  utils.Response:
+    properties:
+      code:
+        description: 状态码 0:成功 其他:失败
+        type: integer
+      data:
+        description: 响应数据
+        type: object
+      msg:
+        description: 提示信息
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
-  description: 这是一个 Go 语言开发的即时通讯系统后端 API 文档
+  description: 即时通讯系统后端 API 文档 - 支持用户认证、好友管理、实时消息功能
   title: GoChat API
   version: "1.0"
 paths:
+  /chat/history:
+    get:
+      consumes:
+      - application/json
+      description: 获取与指定用户的聊天历史记录，支持分页和缓存
+      parameters:
+      - description: 对方用户ID
+        in: query
+        name: target_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.MessageDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取聊天历史记录
+      tags:
+      - 聊天模块
+  /friend/handle:
+    post:
+      consumes:
+      - application/json
+      description: 同意或拒绝收到的好友申请
+      parameters:
+      - description: 处理参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.HandleFriendRequestReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 处理好友申请
+      tags:
+      - 好友模块
+  /friend/list:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户的所有好友列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.UserResponseDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取好友列表
+      tags:
+      - 好友模块
+  /friend/request:
+    post:
+      consumes:
+      - application/json
+      description: 向指定用户发送好友申请，支持附加备注
+      parameters:
+      - description: 好友申请参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.SendFriendRequestReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 发送好友申请
+      tags:
+      - 好友模块
+  /friend/requests:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户收到的待处理好友申请列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.FriendRequestDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取待处理的好友申请
+      tags:
+      - 好友模块
+  /user/info:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的详细信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/api.UserInfoResponse'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取当前用户信息
+      tags:
+      - 用户模块
   /user/login:
     post:
       consumes:
@@ -67,7 +308,7 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/api.Response'
+            - $ref: '#/definitions/utils.Response'
             - properties:
                 data:
                   $ref: '#/definitions/service.LoginResponseDTO'
@@ -93,8 +334,61 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/api.Response'
+            $ref: '#/definitions/utils.Response'
       summary: 用户注册
       tags:
       - 用户模块
+  /user/search:
+    get:
+      consumes:
+      - application/json
+      description: 通过用户名精确搜索其他用户
+      parameters:
+      - description: 用户名
+        in: query
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.UserResponseDTO'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 根据用户名搜索用户
+      tags:
+      - 用户模块
+  /ws:
+    get:
+      consumes:
+      - application/json
+      description: 用户通过JWT Token建立WebSocket实时通信连接
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: 切换协议到WebSocket
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: 建立WebSocket连接
+      tags:
+      - 聊天模块
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

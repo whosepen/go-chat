@@ -21,6 +21,12 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// UserInfoResponse 用户信息响应
+type UserInfoResponse struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+}
+
 // Register godoc
 // @Summary 用户注册
 // @Description 用户通过账号密码注册
@@ -73,11 +79,25 @@ func (u *UserApi) Login(c *gin.Context) {
 }
 
 // GetUserInfo 获取当前登录用户信息
+// @Summary 获取当前用户信息
+// @Description 获取当前登录用户的详细信息
+// @Tags 用户模块
 // @Security ApiKeyAuth
+// @Produce json
+// @Success 200 {object} utils.Response{data=UserInfoResponse}
+// @Router /user/info [get]
 func (u *UserApi) GetUserInfo(c *gin.Context) {
 	// 从上下文中取出中间件存入的值
-	username, _ := c.Get("username")
-	userID, _ := c.Get("userID")
+	username, exists := c.Get("username")
+	if !exists {
+		utils.Unauthorized(c, "用户信息不存在")
+		return
+	}
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "用户信息不存在")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"id":       userID,
