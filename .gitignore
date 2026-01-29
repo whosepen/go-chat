@@ -5,7 +5,7 @@
 *.so
 .vscode/
 .idea/
-*.log
+/logs/
 vendor/
 .claude/
 /data/

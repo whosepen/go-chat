@@ -42,7 +42,18 @@ func InitRouter() *gin.Engine {
 			//WebSocket route
 			protectGroup.GET("/ws", chatApi.Connect)
 			protectGroup.GET("/chat/history", chatApi.GetHistory)
+
+			// 搜索用户 (返回包含ID的DTO)
+			protectGroup.GET("/user/search", api.SearchUser)
+
+			// 好友相关
+			protectGroup.POST("/friend/request", api.SendFriendRequest)  // 发送申请
+			protectGroup.POST("/friend/handle", api.HandleFriendRequest) // 同意/拒绝
+			protectGroup.GET("/friend/requests", api.GetPendingRequests) // 查看列表
+			protectGroup.GET("/friend/list", api.GetFriendList)          // 查看好友列表
+
 		}
+
 	}
 
 	return r
