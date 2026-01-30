@@ -22,6 +22,7 @@ type UserResponseDTO struct {
 	Username string `json:"username"`
 	Nickname string `json:"nickname"`
 	Avatar   string `json:"avatar"`
+	Online   bool   `json:"online"`
 }
 
 // 入参：发送申请

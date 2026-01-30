@@ -2,6 +2,8 @@ package api
 
 import (
 	"errors"
+	"go-chat/global"
+	"go-chat/internal/models"
 	"go-chat/internal/pkg/utils"
 	"go-chat/internal/service"
 
@@ -21,10 +23,20 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// UpdateUserRequest 更新用户信息请求
+type UpdateUserRequest struct {
+	Nickname string `json:"nickname" binding:"max=64"`
+	Avatar   string `json:"avatar" binding:"max=255"`
+	Email    string `json:"email" binding:"email,max=128"`
+}
+
 // UserInfoResponse 用户信息响应
 type UserInfoResponse struct {
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Email    string `json:"email"`
 }
 
 // Register godoc
@@ -102,5 +114,31 @@ func (u *UserApi) GetUserInfo(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"id":       userID,
 		"username": username,
+	})
+}
+
+// GetFullUserInfo 获取当前登录用户完整信息
+// @Summary 获取当前用户完整信息
+// @Description 获取当前登录用户的完整信息（包含昵称、头像、邮箱）
+// @Tags 用户模块
+// @Security ApiKeyAuth
+// @Produce json
+// @Success 200 {object} utils.Response{data=UserInfoResponse}
+// @Router /user/profile [get]
+func (u *UserApi) GetFullUserInfo(c *gin.Context) {
+	userID := c.GetUint("userID")
+
+	var user models.User
+	if err := global.DB.First(&user, userID).Error; err != nil {
+		utils.Fail(c, "用户不存在")
+		return
+	}
+
+	utils.Success(c, UserInfoResponse{
+		ID:       user.ID,
+		Username: user.Username,
+		Nickname: user.Nickname,
+		Avatar:   user.Avatar,
+		Email:    user.Email,
 	})
 }

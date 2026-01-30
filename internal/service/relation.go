@@ -84,7 +84,29 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 
 	// 4. 处理逻辑
 	return global.DB.Transaction(func(tx *gorm.DB) error {
-		// 4.1 更新申请状态 (1:同意, 2:拒绝)
+		// 4.1 如果是同意操作，先清理可能存在的反向申请
+		if req.Action == 1 {
+			// 检查是否已经是好友（防止重复创建）
+			var existingRel models.Relation
+			err := tx.Where("owner_id = ? AND target_id = ? AND type = 1",
+				friendReq.SenderID, friendReq.ReceiverID).First(&existingRel).Error
+			if err == nil {
+				// 已经是好友关系，只更新申请状态为已同意，不重复创建relation
+				friendReq.Status = 1
+				if err := tx.Save(&friendReq).Error; err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// 删除用户发给对方的好友申请（反向申请）
+			if err := tx.Where("sender_id = ? AND receiver_id = ? AND status = 0",
+				friendReq.ReceiverID, friendReq.SenderID).Delete(&models.FriendRequest{}).Error; err != nil {
+				return err
+			}
+		}
+
+		// 4.2 更新申请状态 (1:同意, 2:拒绝)
 		friendReq.Status = req.Action
 		if err := tx.Save(&friendReq).Error; err != nil {
 			return err
@@ -95,7 +117,7 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 			return nil
 		}
 
-		// 4.2 如果是同意 (Action == 1)，需要在 relations 表创建双向好友关系
+		// 4.3 如果是同意 (Action == 1)，需要在 relations 表创建双向好友关系
 		// 关系 A -> B
 		r1 := models.Relation{
 			OwnerID:  friendReq.SenderID,
@@ -196,7 +218,12 @@ func GetFriendList(ctx context.Context, userID uint) ([]UserResponseDTO, error) 
 
 	dtos := make([]UserResponseDTO, 0, len(friends))
 	for _, f := range friends {
-		dtos = append(dtos, ToUserDTO(f))
+		// 查询在线状态
+		online := false
+		if global.RDB.Exists(ctx, onlineStatusKey(f.ID)).Val() > 0 {
+			online = true
+		}
+		dtos = append(dtos, ToUserDTOWithOnline(f, online))
 	}
 
 	return dtos, nil

@@ -1,13 +1,14 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/protocol"
 	"sync"
+	"time"
 
-	"github.com/IBM/sarama"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -50,7 +51,10 @@ func (manager *ChatManager) Start() {
 			manager.Lock.Lock()
 			manager.Clients[conn.UserID] = conn
 			manager.Lock.Unlock()
-			// global.Log.Info("User connected: " + strconv.Itoa(int(conn.UserID)))
+
+			// 设置在线状态到 Redis
+			global.RDB.Set(context.Background(), onlineStatusKey(conn.UserID), "1", 0)
+			global.Log.Info("user online", zap.Uint("user_id", conn.UserID))
 
 		case conn := <-manager.Unregister:
 			// 断开连接
@@ -58,8 +62,12 @@ func (manager *ChatManager) Start() {
 			if _, ok := manager.Clients[conn.UserID]; ok {
 				close(conn.Send) // 关闭发送通道
 				delete(manager.Clients, conn.UserID)
+				global.Log.Info("user offline", zap.Uint("user_id", conn.UserID))
 			}
 			manager.Lock.Unlock()
+
+			// 清除在线状态
+			global.RDB.Del(context.Background(), onlineStatusKey(conn.UserID))
 		}
 	}
 }
@@ -134,22 +142,18 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Media:      1,
 	}
 
-	// 序列化消息
-	msgBytes, err := json.Marshal(dbMsg)
-	if err != nil {
-		global.Log.Error("marshal message failed", zap.Error(err))
+	// 1. 直接入库（不使用 Kafka），GORM 会自动设置 CreatedAt
+	if err := global.DB.WithContext(context.Background()).Create(&dbMsg).Error; err != nil {
+		global.Log.Error("save message failed", zap.Error(err))
 		return
 	}
 
-	// 投递到 Kafka
-	kafkaMsg := &sarama.ProducerMessage{
-		Topic: global.KTopic.ChatMsg,
-		Value: sarama.ByteEncoder(msgBytes),
-	}
-	_, _, err = global.KafkaProducer.SendMessage(kafkaMsg)
-	if err != nil {
-		global.Log.Error("send message to kafka failed", zap.Error(err))
-	}
+	// 2. 清除相关聊天记录的 Redis 缓存
+	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID)
+	global.RDB.Del(context.Background(), key)
+
+	// 3. 只推送给接收方，不推送给发送者自己
+	PushMessageToUser(dbMsg)
 }
 
 func PushMessageToUser(msg models.Message) {
@@ -158,11 +162,17 @@ func PushMessageToUser(msg models.Message) {
 	Manager.Lock.RUnlock()
 
 	if ok {
+		var sendTime int64
+		if !msg.CreatedAt.IsZero() {
+			sendTime = msg.CreatedAt.Unix()
+		} else {
+			sendTime = time.Now().Unix()
+		}
 		reply := protocol.Reply{
 			FromID:   msg.FromUserID,
 			Content:  msg.Content,
 			Type:     protocol.TypeSingleMsg,
-			SendTime: msg.CreatedAt.Unix(),
+			SendTime: sendTime,
 		}
 		replyBytes, err := json.Marshal(reply)
 		if err != nil {

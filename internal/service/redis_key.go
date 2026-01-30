@@ -5,6 +5,11 @@ import (
 	"strconv"
 )
 
+// 在线状态 Key
+func onlineStatusKey(userID uint) string {
+	return fmt.Sprintf("user:online:%d", userID)
+}
+
 // 生成 Redis Key：保证顺序一致 (small_id:big_id)
 func generateKey(id1 uint, id2 uint) string {
 	var key string

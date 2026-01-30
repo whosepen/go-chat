@@ -41,6 +41,17 @@ func ToUserDTO(u models.User) UserResponseDTO {
 	}
 }
 
+// ToUserDTOWithOnline 将User实体转换为DTO（带在线状态）
+func ToUserDTOWithOnline(u models.User, online bool) UserResponseDTO {
+	return UserResponseDTO{
+		ID:       u.ID,
+		Username: u.Username,
+		Nickname: u.Nickname,
+		Avatar:   u.Avatar,
+		Online:   online,
+	}
+}
+
 // ToUserDTOs 批量转换
 func ToUserDTOs(users []models.User) []UserResponseDTO {
 	n := len(users)
