@@ -335,4 +335,4 @@ MIT
 
 ---
 
-本项目使用 [Claude Code](https://claude.com/claude-code) [Gemini](https://gemini.google.com/)辅助开发。
+本项目使用 [Claude Code](https://claude.com/claude-code) 和 [Gemini](https://gemini.google.com/) 辅助开发。
