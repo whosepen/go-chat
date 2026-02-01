@@ -129,3 +129,30 @@ func GetPendingRequests(c *gin.Context) {
 
 	utils.Success(c, requests)
 }
+
+// MarkMessagesRead 标记消息已读
+// @Summary 标记与某好友的消息为已读
+// @Description 当打开某好友的聊天窗口时调用，更新该会话的已读位置
+// @Tags 好友模块
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param request body service.MarkMessagesReadReq true "标记已读参数"
+// @Success 200 {object} utils.Response
+// @Router /friend/mark-read [post]
+func MarkMessagesRead(c *gin.Context) {
+	var req service.MarkMessagesReadReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.FailWithCode(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+
+	userID := c.GetUint("userID")
+
+	if err := service.MarkMessagesAsRead(c.Request.Context(), userID, req); err != nil {
+		utils.Fail(c, err.Error())
+		return
+	}
+
+	utils.SuccessWithMsg(c, "标记成功", nil)
+}

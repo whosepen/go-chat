@@ -6,10 +6,11 @@ package models
 // UserID=2, TargetID=1 (2的好友是1)
 type Relation struct {
 	Model
-	OwnerID  uint   `gorm:"index;not null" json:"owner_id"`  // 谁的关系
-	TargetID uint   `gorm:"index;not null" json:"target_id"` // 对应的好友ID
-	Type     int    `json:"type"`                            // 1=好友, 2=拉黑
-	Desc     string `json:"desc"`                            // 备注名
+	OwnerID        uint   `gorm:"index;not null" json:"owner_id"`                  // 谁的关系
+	TargetID       uint   `gorm:"index;not null" json:"target_id"`                 // 对应的好友ID
+	Type           int    `json:"type"`                                           // 1=好友, 2=拉黑
+	Desc           string `json:"desc"`                                           // 备注名
+	LastReadMsgID  uint   `gorm:"default:0;index" json:"last_read_msg_id"`        // 该用户在该会话中已读的最后一条消息ID
 }
 
 func (Relation) TableName() string {

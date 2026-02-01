@@ -18,11 +18,13 @@ type LoginResponseDTO struct {
 }
 
 type UserResponseDTO struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Online   bool   `json:"online"`
+	ID            uint   `json:"id"`
+	Username      string `json:"username"`
+	Nickname      string `json:"nickname"`
+	Avatar        string `json:"avatar"`
+	Online        bool   `json:"online"`
+	UnreadCount   int    `json:"unread_count"`
+	LastMsgTime   int64  `json:"last_message_time,omitempty"`
 }
 
 // 入参：发送申请
@@ -35,6 +37,11 @@ type SendFriendRequestReq struct {
 type HandleFriendRequestReq struct {
 	RequestID uint `json:"request_id" binding:"required"`
 	Action    int  `json:"action" binding:"required,oneof=1 2"` // 只能传 1 或 2
+}
+
+// 入参：标记消息已读
+type MarkMessagesReadReq struct {
+	TargetID uint `json:"target_id" binding:"required"`
 }
 
 // 出参：申请列表项

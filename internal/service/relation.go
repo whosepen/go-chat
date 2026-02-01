@@ -197,34 +197,88 @@ func SearchUserByUsername(ctx context.Context, username string) (*UserResponseDT
 	return &dto, nil
 }
 
-// GetFriendList 获取我的好友列表
+// GetFriendList 获取我的好友列表（带未读计数）
 func GetFriendList(ctx context.Context, userID uint) ([]UserResponseDTO, error) {
-	var friends []models.User
-
-	// 使用 JOIN 查询：
-	// 从 relations 表出发，找到 owner_id 是我，且 type=1 (是好友) 的记录
-	// 然后关联 users 表，取出 users 表的所有字段
-	// 这样只需要一次数据库交互
+	// 1. 查询用户的所有好友关系记录
+	var relations []models.Relation
 	err := global.DB.WithContext(ctx).
-		Table("users").
-		Select("users.*").
-		Joins("JOIN relations ON relations.target_id = users.id").
-		Where("relations.owner_id = ? AND relations.type = 1", userID).
-		Scan(&friends).Error
-
+		Where("owner_id = ? AND type = 1", userID).
+		Find(&relations).Error
 	if err != nil {
 		return nil, err
 	}
 
-	dtos := make([]UserResponseDTO, 0, len(friends))
-	for _, f := range friends {
-		// 查询在线状态
-		online := false
-		if global.RDB.Exists(ctx, onlineStatusKey(f.ID)).Val() > 0 {
-			online = true
+	dtos := make([]UserResponseDTO, 0, len(relations))
+
+	for _, rel := range relations {
+		// 2. 获取好友信息
+		var user models.User
+		if err := global.DB.WithContext(ctx).First(&user, rel.TargetID).Error; err != nil {
+			continue // 好友不存在，跳过
 		}
-		dtos = append(dtos, ToUserDTOWithOnline(f, online))
+
+		// 3. 查询在线状态
+		online := global.RDB.Exists(ctx, onlineStatusKey(user.ID)).Val() > 0
+
+		// 4. 计算未读消息数量：查询该好友发给我的消息中，msg_id > last_read_msg_id 的数量
+		var unreadCount int64
+		global.DB.WithContext(ctx).
+			Model(&models.Message{}).
+			Where("from_user_id = ? AND to_user_id = ? AND id > ?", rel.TargetID, userID, rel.LastReadMsgID).
+			Count(&unreadCount)
+
+		// 5. 获取最后一条消息时间
+		var lastMsg models.Message
+		lastMsgTime := int64(0)
+		global.DB.WithContext(ctx).
+			Where("(from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)",
+				userID, rel.TargetID, rel.TargetID, userID).
+			Order("id DESC").
+			First(&lastMsg)
+		if lastMsg.ID > 0 {
+			lastMsgTime = lastMsg.CreatedAt.UnixMilli()
+		}
+
+		dtos = append(dtos, UserResponseDTO{
+			ID:          user.ID,
+			Username:    user.Username,
+			Nickname:    user.Nickname,
+			Avatar:      user.Avatar,
+			Online:      online,
+			UnreadCount: int(unreadCount),
+			LastMsgTime: lastMsgTime,
+		})
 	}
 
 	return dtos, nil
+}
+
+// MarkMessagesAsRead 标记与某好友的消息为已读
+func MarkMessagesAsRead(ctx context.Context, userID uint, req MarkMessagesReadReq) error {
+	// 1. 查找该好友关系记录
+	var rel models.Relation
+	if err := global.DB.WithContext(ctx).
+		Where("owner_id = ? AND target_id = ? AND type = 1", userID, req.TargetID).
+		First(&rel).Error; err != nil {
+		return errors.New("好友关系不存在")
+	}
+
+	// 2. 获取该好友发给我的最后一条消息ID
+	var lastMsg models.Message
+	if err := global.DB.WithContext(ctx).
+		Where("from_user_id = ? AND to_user_id = ?", req.TargetID, userID).
+		Order("id DESC").
+		First(&lastMsg).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 没有消息，无需更新
+			return nil
+		}
+		return err
+	}
+
+	// 3. 更新 last_read_msg_id
+	return global.DB.WithContext(ctx).
+		Model(&rel).
+		Where("id = ?", rel.ID).
+		Update("last_read_msg_id", lastMsg.ID).Error
 }
