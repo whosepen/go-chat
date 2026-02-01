@@ -1,6 +1,7 @@
 # GoChat 后端
 
 基于 Go + Gin + MySQL + Redis + Kafka + WebSocket 的实时即时通讯后端服务。
+前端仓库：https://github.com/whosepen/go-chat-web
 
 ## 技术栈
 
