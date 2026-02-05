@@ -87,6 +87,18 @@ func InitRouter() *gin.Engine {
 			protectGroup.GET("/friend/list", api.GetFriendList)            // 查看好友列表
 			protectGroup.POST("/friend/mark-read", api.MarkMessagesRead)   // 标记消息已读
 
+			// 群组相关
+			protectGroup.POST("/group/create", api.CreateGroup)             // 创建群
+			protectGroup.GET("/group/info", api.GetGroupInfo)              // 获取群信息
+			protectGroup.GET("/group/members", api.GetGroupMembers)        // 获取群成员列表
+			protectGroup.POST("/group/join", api.SendGroupRequest)          // 发送入群申请
+			protectGroup.POST("/group/handle-join", api.HandleGroupRequest) // 处理入群申请
+			protectGroup.GET("/group/my-groups", api.GetMyGroups)           // 获取我的群聊列表
+			protectGroup.GET("/group/requests", api.GetGroupRequests)       // 获取收到的入群申请
+			protectGroup.POST("/group/quit", api.QuitGroup)                 // 退出群聊
+			protectGroup.PUT("/group/info", api.UpdateGroupInfo)            // 修改群信息
+			protectGroup.POST("/group/kick", api.KickMember)                // 踢出成员
+
 		}
 
 	}

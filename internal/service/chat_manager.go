@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -122,6 +123,9 @@ func (c *Client) HandleMessage(msg protocol.Message) {
 	case protocol.TypeSingleMsg:
 		c.sendSingleMessage(msg)
 
+	case protocol.TypeGroupMsg:
+		c.sendGroupMessage(msg)
+
 	case protocol.TypeHeartbeat:
 		// 心跳保活，不做处理
 
@@ -142,11 +146,30 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Media:      1,
 	}
 
-	// 1. 直接入库（不使用 Kafka），GORM 会自动设置 CreatedAt
+	// 1. 直接入库
 	if err := global.DB.WithContext(context.Background()).Create(&dbMsg).Error; err != nil {
 		global.Log.Error("save message failed", zap.Error(err))
 		return
 	}
+	//
+	//TODO：私聊目前改用直连DB模式，暂时停用Kafka消费者，保留代码作参考
+	/*
+		msgBytes, err := json.Marshal(dbMsg)
+		if err != nil {
+			global.Log.Error("marshal message failed", zap.Error(err))
+			return
+		}
+
+		// 投递到 Kafka
+		kafkaMsg := &sarama.ProducerMessage{
+			Topic: global.KTopic.ChatMsg,
+			Value: sarama.ByteEncoder(msgBytes),
+		}
+		_, _, err = global.KafkaProducer.SendMessage(kafkaMsg)
+		if err != nil {
+			global.Log.Error("send message to kafka failed", zap.Error(err))
+		}
+	*/
 
 	// 2. 清除相关聊天记录的 Redis 缓存
 	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID)
@@ -154,6 +177,62 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 
 	// 3. 只推送给接收方，不推送给发送者自己
 	PushMessageToUser(dbMsg)
+}
+
+func (c *Client) sendGroupMessage(msg protocol.Message) {
+	dbMsg := models.Message{
+		FromUserID: c.UserID,
+		ToUserID:   msg.TargetID, // ToUserID 存储群ID
+		Content:    msg.Content,
+		Type:       msg.Type,
+		Media:      1,
+	}
+
+	// 发送到 Kafka，由 Consumer 处理群发
+	value, _ := json.Marshal(dbMsg)
+	kafkaMsg := &sarama.ProducerMessage{
+		Topic: global.KTopic.GroupMsg,
+		Value: sarama.ByteEncoder(value),
+	}
+	global.KafkaProducer.SendMessage(kafkaMsg)
+}
+
+func PushMessageToGroup(msg models.Message) {
+	// 查询群成员
+	var members []models.GroupMember
+	if err := global.DB.WithContext(context.Background()).
+		Where("group_id = ?", msg.ToUserID).
+		Find(&members).Error; err != nil {
+		global.Log.Error("query group members failed", zap.Error(err))
+		return
+	}
+
+	var sendTime int64
+	if !msg.CreatedAt.IsZero() {
+		sendTime = msg.CreatedAt.Unix()
+	} else {
+		sendTime = time.Now().Unix()
+	}
+	reply := protocol.Reply{
+		FromID:   msg.FromUserID,
+		Type:     protocol.TypeGroupMsg,
+		Content:  msg.Content,
+		SendTime: sendTime,
+	}
+	replyBytes, _ := json.Marshal(reply)
+
+	Manager.Lock.RLock()
+	defer Manager.Lock.RUnlock()
+
+	for _, member := range members {
+		// 不推送给发送者自己
+		if member.UserID == msg.FromUserID {
+			continue
+		}
+		if client, ok := Manager.Clients[member.UserID]; ok {
+			client.Send <- replyBytes
+		}
+	}
 }
 
 func PushMessageToUser(msg models.Message) {

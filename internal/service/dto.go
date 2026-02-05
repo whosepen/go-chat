@@ -18,13 +18,13 @@ type LoginResponseDTO struct {
 }
 
 type UserResponseDTO struct {
-	ID            uint   `json:"id"`
-	Username      string `json:"username"`
-	Nickname      string `json:"nickname"`
-	Avatar        string `json:"avatar"`
-	Online        bool   `json:"online"`
-	UnreadCount   int    `json:"unread_count"`
-	LastMsgTime   int64  `json:"last_message_time,omitempty"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar"`
+	Online      bool   `json:"online"`
+	UnreadCount int    `json:"unread_count"`
+	LastMsgTime int64  `json:"last_message_time,omitempty"`
 }
 
 // 入参：发送申请
@@ -53,4 +53,77 @@ type FriendRequestDTO struct {
 	Remark     string `json:"remark"`      // 附言
 	Status     int    `json:"status"`      // 状态
 	CreatedAt  string `json:"created_at"`  // 时间
+}
+
+// 入群申请
+type SendGroupRequestReq struct {
+	GroupID int    `json:"group_id" binding:"required"`
+	Remark  string `json:"remark"`
+}
+
+// ============ Group 请求 DTO ============
+type CreateGroupReq struct {
+	Name string `json:"name" binding:"required,min=1,max=50"`
+	Desc string `json:"desc"` // 可选：群描述
+	Icon string `json:"icon"` // 可选：群头像
+}
+
+type HandleGroupRequestReq struct {
+	RequestID uint `json:"request_id" binding:"required"`
+	Action    int  `json:"action" binding:"required,oneof=1 2"` // 1同意 2拒绝
+}
+
+type GetGroupMembersReq struct {
+	GroupID uint `json:"group_id" binding:"required"`
+}
+
+type QuitGroupReq struct {
+	GroupID uint `json:"group_id" binding:"required"`
+}
+
+type UpdateGroupInfoReq struct {
+	GroupID uint   `json:"group_id" binding:"required"`
+	Name    string `json:"name"`
+	Desc    string `json:"desc"`
+	Icon    string `json:"icon"`
+}
+
+type KickMemberReq struct {
+	GroupID uint `json:"group_id" binding:"required"`
+	UserID  uint `json:"user_id" binding:"required"`
+}
+
+type GetGroupInfoReq struct {
+	GroupID uint `json:"group_id" binding:"required"`
+}
+
+// ============ Group 响应 DTO ============
+type GroupInfoDTO struct {
+	ID        uint   `json:"id"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	Icon      string `json:"icon"`
+	Desc      string `json:"desc"`
+	OwnerID   uint   `json:"owner_id"`
+	MemberCnt int    `json:"member_count"`
+}
+
+type GroupMemberDTO struct {
+	UserID   uint   `json:"user_id"`
+	Nickname string `json:"nickname"`
+	Role     int    `json:"role"`    // 1群主 2管理员 3普通成员
+	Mute     int    `json:"mute"`    // 0正常 1禁言
+	JoinTime string `json:"join_time"`
+}
+
+type GroupRequestDTO struct {
+	ID         uint   `json:"id"`
+	GroupID    uint   `json:"group_id"`
+	GroupName  string `json:"group_name"`
+	SenderID   uint   `json:"sender_id"`
+	SenderName string `json:"sender_name"`
+	Avatar     string `json:"avatar"`
+	Remark     string `json:"remark"`
+	Status     int    `json:"status"`
+	CreatedAt  string `json:"created_at"`
 }

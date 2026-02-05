@@ -16,8 +16,9 @@ jwt:
 
 kafka:
   addr: ["localhost:9092"] # 数组，生产环境通常是集群
-  topic: 
+  topic:
     chat: "chat_message"
+    group: "group_message"
     retry: "chat_message_retry"
     dead: "chat_message_dead_letter"
   consumer_group: "chat_group"

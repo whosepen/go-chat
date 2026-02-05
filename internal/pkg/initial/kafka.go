@@ -54,6 +54,9 @@ func InitKafka() {
 	global.KTopic.ChatMsg = viper.GetString("kafka.topic.chat")
 	NewTopic(admin, global.KTopic.ChatMsg, 1, 1)
 
+	global.KTopic.GroupMsg = viper.GetString("kafka.topic.group")
+	NewTopic(admin, global.KTopic.GroupMsg, 1, 1)
+
 	global.KTopic.Retry = viper.GetString("kafka.topic.retry")
 	NewTopic(admin, global.KTopic.Retry, 1, 1)
 

@@ -17,9 +17,10 @@ var (
 )
 
 type KafkaTopic struct {
-	ChatMsg string
-	Retry   string
-	Dead    string
+	ChatMsg  string
+	GroupMsg string
+	Retry    string
+	Dead     string
 }
 
 var KAdrrs []string

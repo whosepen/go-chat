@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
+	"go-chat/internal/pkg/protocol"
 
 	"gorm.io/gorm"
 )
@@ -197,7 +198,7 @@ func SearchUserByUsername(ctx context.Context, username string) (*UserResponseDT
 	return &dto, nil
 }
 
-// GetFriendList 获取我的好友列表（带未读计数）
+// GetFriendList 获取我的好友列表
 func GetFriendList(ctx context.Context, userID uint) ([]UserResponseDTO, error) {
 	// 1. 查询用户的所有好友关系记录
 	var relations []models.Relation
@@ -281,4 +282,41 @@ func MarkMessagesAsRead(ctx context.Context, userID uint, req MarkMessagesReadRe
 		Model(&rel).
 		Where("id = ?", rel.ID).
 		Update("last_read_msg_id", lastMsg.ID).Error
+}
+
+// GetGroupUnreadCount 获取群聊未读消息数量
+func GetGroupUnreadCount(ctx context.Context, userID, groupID uint) (int64, error) {
+	// 1. 查找该群成员记录
+	var member models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		return 0, err
+	}
+
+	// 2. 查询该群中 last_read_msg_id 之后的消息数量
+	var unreadCount int64
+	err := global.DB.WithContext(ctx).
+		Model(&models.Message{}).
+		Where("to_user_id = ? AND type = ? AND id > ?", groupID, protocol.TypeGroupMsg, member.LastReadMsgID).
+		Count(&unreadCount).Error
+
+	return unreadCount, err
+}
+
+// MarkGroupMessagesAsRead 标记群聊消息为已读
+func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint, lastMsgID uint) error {
+	// 查找该群成员记录
+	var member models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		return errors.New("你不在该群中")
+	}
+
+	// 更新 last_read_msg_id
+	return global.DB.WithContext(ctx).
+		Model(&member).
+		Where("id = ?", member.ID).
+		Update("last_read_msg_id", lastMsgID).Error
 }

@@ -14,8 +14,11 @@ import (
 func StartConsumer() {
 	consumer, _ := sarama.NewConsumer([]string{"localhost:9092"}, nil)
 
-	// 启动主消费者
-	go consumeLoop(consumer, global.KTopic.ChatMsg, handleMessageWithLocalRetry)
+	// 启动私聊消息消费者
+	// go consumeLoop(consumer, global.KTopic.ChatMsg, handleMessageWithLocalRetry)
+
+	// 启动群聊消息消费者
+	go consumeLoop(consumer, global.KTopic.GroupMsg, handleGroupMessage)
 
 	// 启动重试消费者
 	go consumeLoop(consumer, global.KTopic.Retry, handleMessageWithDelayRetry)
@@ -40,7 +43,8 @@ func consumeLoop(consumer sarama.Consumer, topic string, handler func([]byte) er
 	}
 }
 
-// 核心业务处理 + 本地重试
+/*
+// 私聊通道本地retry
 func handleMessageWithLocalRetry(value []byte) error {
 	var dbMsg models.Message
 	if err := json.Unmarshal(value, &dbMsg); err != nil {
@@ -67,6 +71,7 @@ func handleMessageWithLocalRetry(value []byte) error {
 	republish(global.KTopic.Retry, value)
 	return nil
 }
+*/
 
 // 重试队列延迟处理
 func handleMessageWithDelayRetry(value []byte) error {
@@ -98,6 +103,31 @@ func handleDeadLetter(value []byte) error {
 		zap.String("raw_json", string(value)),
 		zap.Time("dropped_at", time.Now()),
 	)
+	return nil
+}
+
+// handleGroupMessage 处理群聊消息
+func handleGroupMessage(value []byte) error {
+	var dbMsg models.Message
+	if err := json.Unmarshal(value, &dbMsg); err != nil {
+		republish(global.KTopic.Dead, value)
+		return nil
+	}
+
+	// 本地重试
+	for i := 0; i < global.RetryMax; i++ {
+		err := global.DB.Create(&dbMsg).Error
+		if err == nil {
+			// 成功！推送给群成员
+			PushMessageToGroup(dbMsg)
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 重试耗尽 -> 降级到 Retry Topic
+	global.Log.Warn("Group message retry failed, sending to Retry Topic", zap.Any("msg", dbMsg))
+	republish(global.KTopic.Retry, value)
 	return nil
 }
 
