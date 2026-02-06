@@ -205,7 +205,7 @@ func HandleGroupRequest(ctx context.Context, userID uint, req HandleGroupRequest
 		member := models.GroupMember{
 			GroupID:  uint(groupReq.GroupID),
 			UserID:   uint(groupReq.SenderID),
-			Nickname: "", // 默认空，前端可修改
+			Nickname: "", // 默认空
 			Role:     3,  // 普通成员
 		}
 		return tx.Create(&member).Error

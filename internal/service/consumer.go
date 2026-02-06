@@ -36,8 +36,15 @@ func consumeLoop(consumer sarama.Consumer, topic string, handler func([]byte) er
 		go func(pc sarama.PartitionConsumer) {
 			defer pc.Close()
 			for msg := range pc.Messages() {
-				// 调用具体的处理逻辑
-				handler(msg.Value)
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							global.Log.Error("process message panic", zap.Any("err", r))
+						}
+					}()
+					// 执行具体的业务逻辑
+					handler(msg.Value)
+				}()
 			}
 		}(pc)
 	}
@@ -86,7 +93,7 @@ func handleMessageWithDelayRetry(value []byte) error {
 	err := global.DB.Create(&dbMsg).Error
 	if err == nil {
 		// 终于成功了
-		key := generateKey(dbMsg.ToUserID, dbMsg.FromUserID)
+		key := generateKey(dbMsg.ToUserID, dbMsg.FromUserID, true)
 		global.RDB.Del(context.Background(), key)
 		PushMessageToUser(dbMsg)
 		return nil

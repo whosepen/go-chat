@@ -19,6 +19,7 @@ func ToMessageDTO(m *models.Message) MessageDTO {
 }
 
 // ToMessageDTOs 批量转换
+// 取出来已经反转过list，dtos里的msg排列[旧]->[新]
 func ToMessageDTOs(msgs []models.Message) []MessageDTO {
 	n := len(msgs)
 	if n == 0 {

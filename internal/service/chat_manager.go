@@ -43,7 +43,7 @@ var Manager = ChatManager{
 	Unregister: make(chan *Client),
 }
 
-// Start 启动管理器 (在 main.go 中调用)
+// Start 启动管理器
 func (manager *ChatManager) Start() {
 	for {
 		select {
@@ -53,8 +53,21 @@ func (manager *ChatManager) Start() {
 			manager.Clients[conn.UserID] = conn
 			manager.Lock.Unlock()
 
-			// 设置在线状态到 Redis
-			global.RDB.Set(context.Background(), onlineStatusKey(conn.UserID), "1", 0)
+			// 异步设置在线状态到 Redis
+			// 设置为心跳间隔的 3倍（90秒）
+			// 允许客户端连续丢失2个心跳包，服务器依然认为他在线
+			// 只有连续丢3个，判定离线
+			go func(uid uint) {
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				defer cancel()
+				if err := global.RDB.Set(ctx,
+					onlineStatusKey(uid), "1",
+					90*time.Second).Err(); err != nil {
+					global.Log.Warn("failed to set online status", zap.Error(err))
+				} // redis更新只记录日志，不影响主程序
+
+			}(conn.UserID)
+
 			global.Log.Info("user online", zap.Uint("user_id", conn.UserID))
 
 		case conn := <-manager.Unregister:
@@ -68,7 +81,14 @@ func (manager *ChatManager) Start() {
 			manager.Lock.Unlock()
 
 			// 清除在线状态
-			global.RDB.Del(context.Background(), onlineStatusKey(conn.UserID))
+			go func(uid uint) {
+				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+				defer cancel()
+
+				if err := global.RDB.Del(ctx, onlineStatusKey(uid)).Err(); err != nil {
+					global.Log.Warn("Failed to set offline status", zap.Error(err))
+				}
+			}(conn.UserID)
 		}
 	}
 }
@@ -172,7 +192,7 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 	*/
 
 	// 2. 清除相关聊天记录的 Redis 缓存
-	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID)
+	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID, false)
 	global.RDB.Del(context.Background(), key)
 
 	// 3. 只推送给接收方，不推送给发送者自己
@@ -260,4 +280,8 @@ func PushMessageToUser(msg models.Message) {
 		}
 		targetClient.Send <- replyBytes
 	}
+}
+
+func HandleHeartbeat() {
+
 }

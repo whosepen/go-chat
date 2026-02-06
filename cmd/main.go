@@ -24,7 +24,14 @@ func main() {
 	service.StartConsumer()
 
 	// 自动迁移 (Auto Migrate)
-	if err := global.DB.AutoMigrate(&models.User{}, &models.Message{}, &models.Relation{}, &models.Group{}, &models.GroupMember{}, &models.FriendRequest{}); err != nil {
+	if err := global.DB.AutoMigrate(
+		&models.User{},
+		&models.Message{},
+		&models.Relation{},
+		&models.Group{},
+		&models.GroupMember{},
+		&models.GroupRequest{},
+		&models.FriendRequest{}); err != nil {
 		global.Log.Fatal("Database auto migration failed")
 	}
 	global.Log.Info("Database auto migration success")

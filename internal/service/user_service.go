@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/utils"
@@ -9,6 +10,12 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	ErrInvalidPassword  = errors.New("username or password error")
+	ErrGenerateToken    = errors.New("generate token failed")
+	ErrOccupiedUsername = errors.New("username is already exists")
 )
 
 type UserService struct{}
@@ -58,7 +65,12 @@ func (s *UserService) Login(ctx context.Context, username, password string) (*Lo
 	}
 	go func() { // 修改最后登录时间不是什么重要的环节，在成功登录后单独开进程处理，设置3秒的timeout防止进程挂起占用资源
 		timeOut, cancel := context.WithTimeout(context.Background(), 3*time.Second) //主进程结束返回后会取消ctx,所以需要挂在新的ctxBackground上
-		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				global.Log.Error("Async DB panic", zap.Any("err", r))
+			}
+			cancel()
+		}()
 		err := global.DB.WithContext(timeOut).
 			Model(&user).
 			Update("last_login", time.Now()).Error

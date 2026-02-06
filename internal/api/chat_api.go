@@ -4,6 +4,7 @@ import (
 	"go-chat/internal/pkg/utils"
 	"go-chat/internal/service"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -69,16 +70,6 @@ func (api *ChatApi) Connect(c *gin.Context) {
 	client.Read()
 }
 
-// GetHistory 获取聊天历史记录
-// @Summary 获取聊天历史记录
-// @Description 获取与指定用户的聊天历史记录，支持分页和缓存
-// @Tags 聊天模块
-// @Security ApiKeyAuth
-// @Accept json
-// @Produce json
-// @Param target_id query int true "对方用户ID"
-// @Success 200 {object} utils.Response{data=[]service.MessageDTO}
-// @Router /chat/history [get]
 func (api *ChatApi) GetHistory(c *gin.Context) {
 	v, exists := c.Get("userID")
 	if !exists {
@@ -86,9 +77,19 @@ func (api *ChatApi) GetHistory(c *gin.Context) {
 		return
 	}
 	userID := v.(uint)
-	targetIDStr := c.Query("target_id")
 
-	messages, err := service.GetHistoryMsg(c.Request.Context(), userID, targetIDStr)
+	// 解析参数，从 Query 拿 String 并转 Uint
+	targetIDStr := c.Query("target_id")
+	chatTypeStr := c.Query("chat_type")
+
+	targetID, err1 := strconv.ParseUint(targetIDStr, 10, 64)
+	chatType, err2 := strconv.ParseUint(chatTypeStr, 10, 64) // 前端传 2(私聊)  3(群聊)
+	if err1 != nil || err2 != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+
+	messages, err := service.GetHistoryMsg(c.Request.Context(), userID, uint(targetID), uint(chatType))
 	if err != nil {
 		utils.Fail(c, "历史记录拉取失败")
 		return
