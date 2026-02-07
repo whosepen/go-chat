@@ -9,6 +9,11 @@ func onlineStatusKey(userID uint) string {
 	return fmt.Sprintf("user:online:%d", userID)
 }
 
+// 群id Key
+func groupIDKey(groupCode string) string {
+	return fmt.Sprintf("group:id:code:%s", groupCode)
+}
+
 // 生成 Redis Key：保证顺序一致 (small_id:big_id)
 // 群消息key id1 为群ID
 func generateKey(id1 uint, id2 uint, isGroup bool) string {

@@ -1,5 +1,14 @@
 package service
 
+type UserFullInfoDTO struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"` // 用户名，唯一
+	Nickname string `json:"nickname"` // 昵称
+	Avatar   string `json:"avatar"`   // 头像URL
+	Email    string `json:"email"`    // 邮箱
+	Phone    string `json:"phone"`    // 手机号
+}
+
 // MessageDTO 消息数据传输对象（用于 API 响应）
 type MessageDTO struct {
 	ID         uint   `json:"id"`
@@ -73,10 +82,6 @@ type HandleGroupRequestReq struct {
 	Action    int  `json:"action" binding:"required,oneof=1 2"` // 1同意 2拒绝
 }
 
-type GetGroupMembersReq struct {
-	GroupID uint `json:"group_id" binding:"required"`
-}
-
 type QuitGroupReq struct {
 	GroupID uint `json:"group_id" binding:"required"`
 }
@@ -93,10 +98,6 @@ type KickMemberReq struct {
 	UserID  uint `json:"user_id" binding:"required"`
 }
 
-type GetGroupInfoReq struct {
-	GroupID uint `json:"group_id" binding:"required"`
-}
-
 // ============ Group 响应 DTO ============
 type GroupInfoDTO struct {
 	ID        uint   `json:"id"`
@@ -111,8 +112,8 @@ type GroupInfoDTO struct {
 type GroupMemberDTO struct {
 	UserID   uint   `json:"user_id"`
 	Nickname string `json:"nickname"`
-	Role     int    `json:"role"`    // 1群主 2管理员 3普通成员
-	Mute     int    `json:"mute"`    // 0正常 1禁言
+	Role     int    `json:"role"` // 1群主 2管理员 3普通成员
+	Mute     int    `json:"mute"` // 0正常 1禁言
 	JoinTime string `json:"join_time"`
 }
 

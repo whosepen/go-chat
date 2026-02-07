@@ -80,7 +80,34 @@ func handleMessageWithLocalRetry(value []byte) error {
 }
 */
 
-// 重试队列延迟处理
+// ------ handleGroupMessage 处理群聊消息 --------------------------------------------------------
+func handleGroupMessage(value []byte) error {
+	var dbMsg models.Message
+
+	// 反序列化失败，脏数据直接投死信队列
+	if err := json.Unmarshal(value, &dbMsg); err != nil {
+		republish(global.KTopic.Dead, value)
+		return nil
+	}
+
+	// 本地重试
+	for i := 0; i < global.RetryMax; i++ {
+		err := global.DB.Create(&dbMsg).Error
+		if err == nil {
+			// 成功！推送给群成员
+			PushMessageToGroup(dbMsg)
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 重试耗尽 -> 降级到 Retry Topic
+	global.Log.Warn("Group message retry failed, sending to Retry Topic", zap.Any("msg", dbMsg))
+	republish(global.KTopic.Retry, value)
+	return nil
+}
+
+// ------ 重试队列延迟处理 ------------------------------------------------------------------------
 func handleMessageWithDelayRetry(value []byte) error {
 	// 强制延迟：让消息在队列里待5秒后再处理
 	// 这样给数据库一段恢复时间
@@ -105,36 +132,12 @@ func handleMessageWithDelayRetry(value []byte) error {
 	return nil
 }
 
+// ------ 死信队列 -----------------------------------------------------------------------------
 func handleDeadLetter(value []byte) error {
 	global.Log.Error("DEAD LETTER MESSAGE",
 		zap.String("raw_json", string(value)),
 		zap.Time("dropped_at", time.Now()),
 	)
-	return nil
-}
-
-// handleGroupMessage 处理群聊消息
-func handleGroupMessage(value []byte) error {
-	var dbMsg models.Message
-	if err := json.Unmarshal(value, &dbMsg); err != nil {
-		republish(global.KTopic.Dead, value)
-		return nil
-	}
-
-	// 本地重试
-	for i := 0; i < global.RetryMax; i++ {
-		err := global.DB.Create(&dbMsg).Error
-		if err == nil {
-			// 成功！推送给群成员
-			PushMessageToGroup(dbMsg)
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// 重试耗尽 -> 降级到 Retry Topic
-	global.Log.Warn("Group message retry failed, sending to Retry Topic", zap.Any("msg", dbMsg))
-	republish(global.KTopic.Retry, value)
 	return nil
 }
 

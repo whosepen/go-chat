@@ -281,3 +281,19 @@ func GetGroupRequests(c *gin.Context) {
 
 	utils.Success(c, requests)
 }
+
+func SearchGroupByCode(c *gin.Context) {
+	groupCode := c.Query("group_code")
+
+	if groupCode == "" {
+		utils.Fail(c, "group code不能为空")
+	}
+
+	res, err := service.SearchGroupByCode(c.Request.Context(), groupCode)
+	if err != nil {
+		utils.ServerError(c, "未找到群组")
+		return
+	}
+
+	utils.Success(c, res)
+}

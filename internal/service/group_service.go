@@ -6,7 +6,9 @@ import (
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/utils"
+	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -18,6 +20,7 @@ var (
 	ErrNotGroupOwner     = errors.New("只有群主可以执行此操作")
 	ErrCannotKickOwner   = errors.New("不能移除群主")
 	ErrCannotQuitAsOwner = errors.New("群主不能直接退出，请先转让群或解散群")
+	ErrUnknownForGroup   = errors.New("群聊业务未知错误")
 )
 
 // CreateGroup 创建群组
@@ -103,13 +106,52 @@ func JoinGroup(ctx context.Context, userID int, req SendGroupRequestReq) error {
 	return global.DB.WithContext(ctx).Create(&groupReq).Error
 }
 
-// GetGroupCode 获取群号
-func GetGroupCode(groupID int, ctx context.Context) (string, error) {
-	var group models.Group
-	if err := global.DB.WithContext(ctx).Where("id = ?", groupID).First(&group).Error; err != nil {
-		return "", ErrGroupNotFound
+// SearchGroupByCode 通过group code查找群
+func SearchGroupByCode(ctx context.Context, groupCode string) (*GroupInfoDTO, error) {
+	key := groupIDKey(groupCode)
+	if cached, err := global.RDB.Get(ctx, key).Int(); err == nil {
+		return GetGroupInfo(ctx, uint(cached))
 	}
-	return group.Code, nil
+	var group models.Group
+	if err := global.DB.WithContext(ctx).
+		Where("group_code = ?", groupCode).
+		First(&group).Error; err != nil {
+		return nil, ErrGroupNotFound
+	}
+
+	// 统计成员数量
+	var memberCount int64
+	err := global.DB.WithContext(ctx).
+		Model(&models.GroupMember{}).Where("group_id = ?", group.ID).Count(&memberCount).Error
+
+	if err != nil {
+		global.Log.Warn("Get group members count failed", zap.Error(err))
+		return nil, err
+	}
+
+	// 异步存code-id到redis
+	go func(key string, id uint) {
+		tctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer func() {
+			if r := recover(); r != nil {
+				global.Log.Warn("set redis panic", zap.Any("err", r))
+			}
+			cancel()
+		}()
+		if err := global.RDB.Set(tctx, key, id, 6*time.Hour).Err(); err != nil {
+			global.Log.Debug("set redis error", zap.Error(err))
+		}
+	}(key, group.ID)
+
+	return &GroupInfoDTO{
+		ID:        group.ID,
+		Code:      group.Code,
+		Name:      group.Name,
+		Icon:      group.Icon,
+		Desc:      group.Desc,
+		OwnerID:   group.OwnerID,
+		MemberCnt: int(memberCount),
+	}, nil
 }
 
 // GetGroupInfo 获取群信息
@@ -121,7 +163,13 @@ func GetGroupInfo(ctx context.Context, groupID uint) (*GroupInfoDTO, error) {
 
 	// 统计成员数量
 	var memberCount int64
-	global.DB.WithContext(ctx).Model(&models.GroupMember{}).Where("group_id = ?", groupID).Count(&memberCount)
+	err := global.DB.WithContext(ctx).
+		Model(&models.GroupMember{}).Where("group_id = ?", groupID).Count(&memberCount).Error
+
+	if err != nil {
+		global.Log.Warn("Get group members count failed", zap.Error(err))
+		return nil, err
+	}
 
 	return &GroupInfoDTO{
 		ID:        group.ID,

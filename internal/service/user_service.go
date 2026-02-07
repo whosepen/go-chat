@@ -82,3 +82,17 @@ func (s *UserService) Login(ctx context.Context, username, password string) (*Lo
 	}()
 	return &dto, nil
 }
+
+func GetFullUserInfo(ctx context.Context, uid uint) (UserFullInfoDTO, error) {
+	var user models.User
+	if err := global.DB.WithContext(ctx).First(&user, uid).Error; err != nil {
+		return UserFullInfoDTO{}, err
+	}
+	return UserFullInfoDTO{
+		ID:       user.ID,
+		Username: user.Username,
+		Nickname: user.Nickname,
+		Avatar:   user.Avatar,
+		Email:    user.Email,
+	}, nil
+}
