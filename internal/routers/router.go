@@ -94,10 +94,10 @@ func InitRouter() *gin.Engine {
 			protectGroup.GET("/group/search", api.SearchGroupByCode)        // 通过code获取群信息
 			protectGroup.POST("/group/join", api.SendGroupRequest)          // 发送入群申请
 			protectGroup.POST("/group/handle-join", api.HandleGroupRequest) // 处理入群申请
-			protectGroup.GET("/group/my-groups", api.GetMyGroups)           // 获取我的群聊列表
+			protectGroup.GET("/group/my-groups", api.GetMyGroups)           // 获取我的群聊列表 new:不再返回GroupInfoDTO，使用包含未读消息及最新消息时间的GroupListReqDTO
 			protectGroup.GET("/group/requests", api.GetGroupRequests)       // 获取收到的入群申请
 			protectGroup.POST("/group/quit", api.QuitGroup)                 // 退出群聊
-			protectGroup.PUT("/group/info", api.UpdateGroupInfo)            // 修改群信息
+			protectGroup.POST("/group/info", api.UpdateGroupInfo)           // 修改群信息
 			protectGroup.POST("/group/kick", api.KickMember)                // 踢出成员
 
 		}

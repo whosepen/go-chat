@@ -282,6 +282,7 @@ func GetGroupRequests(c *gin.Context) {
 	utils.Success(c, requests)
 }
 
+// 通过code查找群组
 func SearchGroupByCode(c *gin.Context) {
 	groupCode := c.Query("group_code")
 
@@ -297,3 +298,5 @@ func SearchGroupByCode(c *gin.Context) {
 
 	utils.Success(c, res)
 }
+
+// 标记群聊信息已读

@@ -128,3 +128,12 @@ type GroupRequestDTO struct {
 	Status     int    `json:"status"`
 	CreatedAt  string `json:"created_at"`
 }
+
+type GroupListReqDTO struct {
+	ID          uint   `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	UnreadCount int    `json:"unread_count"`
+	LastMsgTime int64  `json:"last_message_time,omitempty"`
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
+	"go-chat/internal/pkg/protocol"
 	"go-chat/internal/pkg/utils"
 	"time"
 
@@ -261,7 +262,7 @@ func HandleGroupRequest(ctx context.Context, userID uint, req HandleGroupRequest
 }
 
 // GetMyGroups 获取我的群聊列表
-func GetMyGroups(ctx context.Context, userID uint) ([]GroupInfoDTO, error) {
+func GetMyGroups(ctx context.Context, userID uint) ([]GroupListReqDTO, error) {
 	var members []models.GroupMember
 	if err := global.DB.WithContext(ctx).
 		Where("user_id = ?", userID).
@@ -269,15 +270,82 @@ func GetMyGroups(ctx context.Context, userID uint) ([]GroupInfoDTO, error) {
 		return nil, err
 	}
 
-	dtos := make([]GroupInfoDTO, 0, len(members))
+	dtos := make([]GroupListReqDTO, 0, len(members))
 	for _, m := range members {
-		group, err := GetGroupInfo(ctx, m.GroupID)
-		if err != nil {
-			continue // 群不存在，跳过
+		var group models.Group
+		if err := global.DB.WithContext(ctx).First(&group, m.GroupID).Error; err != nil {
+			continue
 		}
-		dtos = append(dtos, *group)
+
+		// 计算未读消息数
+		var unreadCount int64
+		if m.LastReadMsgID != 0 {
+			err := global.DB.WithContext(ctx).
+				Model(&models.Message{}).
+				Where("to_user_id = ? AND type = ? AND id > ?", group.ID, protocol.TypeGroupMsg, m.LastReadMsgID).
+				Count(&unreadCount).Error
+			if err != nil {
+				unreadCount = 0
+			}
+		}
+		// 最新消息时间
+		var lastMsg models.Message
+		lastMsgTime := int64(0)
+		global.DB.WithContext(ctx).
+			Where("to_user_id = ? AND type = ?", group.ID, protocol.TypeGroupMsg).
+			Order("id DESC").
+			First(&lastMsg)
+		if lastMsg.ID > 0 {
+			lastMsgTime = lastMsg.CreatedAt.UnixMilli()
+		}
+
+		dtos = append(dtos, GroupListReqDTO{
+			ID:          group.ID,
+			Code:        group.Code,
+			Name:        group.Name,
+			Icon:        group.Icon,
+			UnreadCount: int(unreadCount),
+			LastMsgTime: lastMsgTime,
+		})
 	}
 	return dtos, nil
+}
+
+// GetGroupUnreadCount 获取群聊未读消息数量
+func GetGroupUnreadCount(ctx context.Context, userID, groupID uint) (int64, error) {
+	// 1. 查找该群成员记录
+	var member models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		return 0, err
+	}
+
+	// 2. 查询该群中 last_read_msg_id 之后的消息数量
+	var unreadCount int64
+	err := global.DB.WithContext(ctx).
+		Model(&models.Message{}).
+		Where("to_user_id = ? AND type = ? AND id > ?", groupID, protocol.TypeGroupMsg, member.LastReadMsgID).
+		Count(&unreadCount).Error
+
+	return unreadCount, err
+}
+
+// MarkGroupMessagesAsRead 标记群聊消息为已读
+func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint, lastMsgID uint) error {
+	// 查找该群成员记录
+	var member models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		First(&member).Error; err != nil {
+		return errors.New("你不在该群中")
+	}
+
+	// 更新 last_read_msg_id
+	return global.DB.WithContext(ctx).
+		Model(&member).
+		Where("id = ?", member.ID).
+		Update("last_read_msg_id", lastMsgID).Error
 }
 
 // QuitGroup 退出群聊

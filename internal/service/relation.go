@@ -5,7 +5,6 @@ import (
 	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
-	"go-chat/internal/pkg/protocol"
 
 	"gorm.io/gorm"
 )
@@ -20,7 +19,7 @@ var (
 )
 
 // --------------------------
-// 1. 发送好友申请
+// 发送好友申请
 // --------------------------
 func SendFriendRequest(ctx context.Context, userID uint, req SendFriendRequestReq) error {
 	// 0. 基本校验
@@ -64,7 +63,7 @@ func SendFriendRequest(ctx context.Context, userID uint, req SendFriendRequestRe
 }
 
 // --------------------------
-// 2. 处理好友申请 (同意/拒绝)
+// 处理好友申请 (同意/拒绝)
 // --------------------------
 func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendRequestReq) error {
 	// 1. 查找申请记录
@@ -144,7 +143,7 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 }
 
 // --------------------------
-// 3. 获取待处理的申请列表
+// 获取待处理的申请列表
 // --------------------------
 // 返回 DTO 列表，避免暴露 Sender 的敏感信息
 func GetPendingRequests(ctx context.Context, userID uint) ([]FriendRequestDTO, error) {
@@ -167,7 +166,12 @@ func GetPendingRequests(ctx context.Context, userID uint) ([]FriendRequestDTO, e
 	dtos := make([]FriendRequestDTO, 0, len(requests))
 	for _, req := range requests {
 		// 因为用了 Preload，这里可以直接通过 req.Sender 拿到用户信息
-		// 如果没查到 Sender (比如用户注销了)，req.Sender 会是零值，不会 panic
+		// 如果不使用 Preload，req.SenderID虽然有值，但是取出来时不会为req.Sender填充user,
+		// 如果没查到 Sender (比如用户注销了)，req.Sender.ID 会是零值，不会 panic
+		if req.Sender.ID == 0 {
+			continue
+		}
+
 		dtos = append(dtos, FriendRequestDTO{
 			ID:         req.ID,
 			SenderID:   req.SenderID,
@@ -282,41 +286,4 @@ func MarkMessagesAsRead(ctx context.Context, userID uint, req MarkMessagesReadRe
 		Model(&rel).
 		Where("id = ?", rel.ID).
 		Update("last_read_msg_id", lastMsg.ID).Error
-}
-
-// GetGroupUnreadCount 获取群聊未读消息数量
-func GetGroupUnreadCount(ctx context.Context, userID, groupID uint) (int64, error) {
-	// 1. 查找该群成员记录
-	var member models.GroupMember
-	if err := global.DB.WithContext(ctx).
-		Where("group_id = ? AND user_id = ?", groupID, userID).
-		First(&member).Error; err != nil {
-		return 0, err
-	}
-
-	// 2. 查询该群中 last_read_msg_id 之后的消息数量
-	var unreadCount int64
-	err := global.DB.WithContext(ctx).
-		Model(&models.Message{}).
-		Where("to_user_id = ? AND type = ? AND id > ?", groupID, protocol.TypeGroupMsg, member.LastReadMsgID).
-		Count(&unreadCount).Error
-
-	return unreadCount, err
-}
-
-// MarkGroupMessagesAsRead 标记群聊消息为已读
-func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint, lastMsgID uint) error {
-	// 查找该群成员记录
-	var member models.GroupMember
-	if err := global.DB.WithContext(ctx).
-		Where("group_id = ? AND user_id = ?", groupID, userID).
-		First(&member).Error; err != nil {
-		return errors.New("你不在该群中")
-	}
-
-	// 更新 last_read_msg_id
-	return global.DB.WithContext(ctx).
-		Model(&member).
-		Where("id = ?", member.ID).
-		Update("last_read_msg_id", lastMsgID).Error
 }
