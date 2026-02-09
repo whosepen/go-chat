@@ -1,236 +1,43 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "即时通讯系统后端 API 文档 - 支持用户认证、好友管理、实时消息功能",
+        "description": "这是一个 Go 语言开发的即时通讯系统后端 API 文档",
         "title": "GoChat API",
         "contact": {},
         "version": "1.0"
     },
     "host": "localhost:8080",
     "basePath": "/api",
-    "schemes": ["http", "https"],
     "paths": {
-        "/user/register": {
-            "post": {
-                "description": "用户通过账号密码注册",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["用户模块"],
-                "summary": "用户注册",
-                "parameters": [{
-                    "description": "注册参数",
-                    "name": "request",
-                    "in": "body",
-                    "required": true,
-                    "schema": {
-                        "$ref": "#/definitions/api.RegisterRequest"
-                    }
-                }],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/utils.Response"
-                        }
-                    }
-                }
-            }
-        },
-        "/user/login": {
-            "post": {
-                "description": "用户通过账号密码登录",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["用户模块"],
-                "summary": "用户登录",
-                "parameters": [{
-                    "description": "登录参数",
-                    "name": "request",
-                    "in": "body",
-                    "required": true,
-                    "schema": {
-                        "$ref": "#/definitions/api.LoginRequest"
-                    }
-                }],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "$ref": "#/definitions/service.LoginResponseDTO"
-                                    }
-                                }
-                            }]
-                        }
-                    }
-                }
-            }
-        },
-        "/user/info": {
-            "get": {
-                "description": "获取当前登录用户的详细信息",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["用户模块"],
-                "summary": "获取当前用户信息",
-                "security": [{"ApiKeyAuth": []}],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "$ref": "#/definitions/api.UserInfoResponse"
-                                    }
-                                }
-                            }]
-                        }
-                    }
-                }
-            }
-        },
-        "/user/search": {
-            "get": {
-                "description": "通过用户名精确搜索其他用户",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["用户模块"],
-                "summary": "根据用户名搜索用户",
-                "security": [{"ApiKeyAuth": []}],
-                "parameters": [{
-                    "name": "username",
-                    "in": "query",
-                    "required": true,
-                    "type": "string",
-                    "description": "用户名"
-                }],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "$ref": "#/definitions/service.UserResponseDTO"
-                                    }
-                                }
-                            }]
-                        }
-                    }
-                }
-            }
-        },
-        "/ws": {
-            "get": {
-                "description": "用户通过JWT Token建立WebSocket实时通信连接",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["聊天模块"],
-                "summary": "建立WebSocket连接",
-                "security": [{"ApiKeyAuth": []}],
-                "responses": {
-                    "101": {
-                        "description": "切换协议到WebSocket",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/chat/history": {
-            "get": {
-                "description": "获取与指定用户的聊天历史记录，支持分页和缓存",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["聊天模块"],
-                "summary": "获取聊天历史记录",
-                "security": [{"ApiKeyAuth": []}],
-                "parameters": [{
-                    "name": "target_id",
-                    "in": "query",
-                    "required": true,
-                    "type": "integer",
-                    "description": "对方用户ID"
-                }],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "type": "array",
-                                        "items": {
-                                            "$ref": "#/definitions/service.MessageDTO"
-                                        }
-                                    }
-                                }
-                            }]
-                        }
-                    }
-                }
-            }
-        },
-        "/friend/request": {
-            "post": {
-                "description": "向指定用户发送好友申请，支持附加备注",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["好友模块"],
-                "summary": "发送好友申请",
-                "security": [{"ApiKeyAuth": []}],
-                "parameters": [{
-                    "description": "好友申请参数",
-                    "name": "request",
-                    "in": "body",
-                    "required": true,
-                    "schema": {
-                        "$ref": "#/definitions/service.SendFriendRequestReq"
-                    }
-                }],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/utils.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/friend/handle": {
             "post": {
-                "description": "同意或拒绝收到的好友申请",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["好友模块"],
-                "summary": "处理好友申请",
-                "security": [{"ApiKeyAuth": []}],
-                "parameters": [{
-                    "description": "处理参数",
-                    "name": "request",
-                    "in": "body",
-                    "required": true,
-                    "schema": {
-                        "$ref": "#/definitions/service.HandleFriendRequestReq"
+                "security": [
+                    {
+                        "ApiKeyAuth": []
                     }
-                }],
+                ],
+                "description": "同意或拒绝收到的好友申请",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "好友模块"
+                ],
+                "summary": "处理好友申请",
+                "parameters": [
+                    {
+                        "description": "处理参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.HandleFriendRequestReq"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -243,29 +50,120 @@
         },
         "/friend/list": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "获取当前用户的所有好友列表",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["好友模块"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "好友模块"
+                ],
                 "summary": "获取好友列表",
-                "security": [{"ApiKeyAuth": []}],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "type": "array",
-                                        "items": {
-                                            "$ref": "#/definitions/service.UserResponseDTO"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.UserResponseDTO"
+                                            }
                                         }
                                     }
                                 }
-                            }]
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/mark-read": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "当打开某好友的聊天窗口时调用，更新该会话的已读位置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "好友模块"
+                ],
+                "summary": "标记与某好友的消息为已读",
+                "parameters": [
+                    {
+                        "description": "标记已读参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.MarkMessagesReadReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/friend/request": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "向指定用户发送好友申请，支持附加备注",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "好友模块"
+                ],
+                "summary": "发送好友申请",
+                "parameters": [
+                    {
+                        "description": "好友申请参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.SendFriendRequestReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
                         }
                     }
                 }
@@ -273,29 +171,679 @@
         },
         "/friend/requests": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "获取当前用户收到的待处理好友申请列表",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["好友模块"],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "好友模块"
+                ],
                 "summary": "获取待处理的好友申请",
-                "security": [{"ApiKeyAuth": []}],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [{
-                                "$ref": "#/definitions/utils.Response"
-                            }, {
-                                "type": "object",
-                                "properties": {
-                                    "data": {
-                                        "type": "array",
-                                        "items": {
-                                            "$ref": "#/definitions/service.FriendRequestDTO"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.FriendRequestDTO"
+                                            }
                                         }
                                     }
                                 }
-                            }]
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/group/create": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "创建一个新的群聊，创建者自动成为群主",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "创建群组",
+                "parameters": [
+                    {
+                        "description": "创建群组参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.CreateGroupReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.GroupInfoDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/group/handle-join": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "同意或拒绝收到的入群申请（仅群主和管理员可操作）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "处理入群申请",
+                "parameters": [
+                    {
+                        "description": "处理申请参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.HandleGroupRequestReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/group/info": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "根据群ID获取群组详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "获取群组信息",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "群组ID",
+                        "name": "group_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.GroupInfoDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "修改群组名称、头像、描述（仅群主可操作）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "修改群信息",
+                "parameters": [
+                    {
+                        "description": "修改群信息参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.UpdateGroupInfoReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/group/join": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "向指定群组发送入群申请",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "发送入群申请",
+                "parameters": [
+                    {
+                        "description": "入群申请参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.SendGroupRequestReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/group/kick": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "将指定成员踢出群聊（群主和管理员可操作）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "踢出群成员",
+                "parameters": [
+                    {
+                        "description": "踢人参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.KickMemberReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/group/members": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "获取指定群组的成员列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "获取群成员列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "群组ID",
+                        "name": "group_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.GroupMemberDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/group/my-groups": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "获取当前用户加入的所有群组，返回包含未读消息数和最新消息时间",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "获取我的群聊列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.GroupListReqDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/group/quit": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "退出指定的群聊（群主不能直接退出，需先转让或解散）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "退出群聊",
+                "parameters": [
+                    {
+                        "description": "退出群组参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.QuitGroupReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/group/requests": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "获取当前用户作为群主或管理员收到的待处理入群申请",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "获取收到的入群申请",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.GroupRequestDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/group/search": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "根据群号（展示用ID）搜索群组信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "群组模块"
+                ],
+                "summary": "通过群号搜索群组",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "群组邀请码",
+                        "name": "group_code",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.GroupInfoDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/user/login": {
+            "post": {
+                "description": "用户通过账号密码登录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户模块"
+                ],
+                "summary": "用户登录",
+                "parameters": [
+                    {
+                        "description": "登录参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.LoginResponseDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/user/register": {
+            "post": {
+                "description": "用户通过账号密码注册",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户模块"
+                ],
+                "summary": "用户注册",
+                "parameters": [
+                    {
+                        "description": "注册参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/utils.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/search": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "通过用户名精确搜索其他用户",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户模块"
+                ],
+                "summary": "根据用户名搜索用户",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户名",
+                        "name": "username",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.UserResponseDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/ws": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "用户通过JWT Token建立WebSocket实时通信连接",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "聊天模块"
+                ],
+                "summary": "建立WebSocket连接",
+                "responses": {
+                    "101": {
+                        "description": "切换协议到WebSocket",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -305,7 +853,10 @@
     "definitions": {
         "api.LoginRequest": {
             "type": "object",
-            "required": ["password", "username"],
+            "required": [
+                "password",
+                "username"
+            ],
             "properties": {
                 "password": {
                     "type": "string"
@@ -317,11 +868,13 @@
         },
         "api.RegisterRequest": {
             "type": "object",
-            "required": ["password", "username"],
+            "required": [
+                "password",
+                "username"
+            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "format": "email"
+                    "type": "string"
                 },
                 "password": {
                     "type": "string",
@@ -332,43 +885,215 @@
                 }
             }
         },
-        "api.UserInfoResponse": {
+        "service.CreateGroupReq": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "username": {
+                "desc": {
+                    "description": "可选：群描述",
                     "type": "string"
+                },
+                "icon": {
+                    "description": "可选：群头像",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
                 }
             }
         },
-        "service.SendFriendRequestReq": {
+        "service.FriendRequestDTO": {
             "type": "object",
-            "required": ["target_id"],
             "properties": {
-                "remark": {
-                    "type": "string",
-                    "description": "申请附言"
+                "avatar": {
+                    "description": "发送人头像",
+                    "type": "string"
                 },
-                "target_id": {
-                    "type": "integer",
-                    "description": "目标用户ID"
+                "created_at": {
+                    "description": "时间",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "申请记录ID",
+                    "type": "integer"
+                },
+                "remark": {
+                    "description": "附言",
+                    "type": "string"
+                },
+                "sender_id": {
+                    "description": "发送人ID",
+                    "type": "integer"
+                },
+                "sender_name": {
+                    "description": "发送人用户名",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "状态",
+                    "type": "integer"
+                }
+            }
+        },
+        "service.GroupInfoDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "desc": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "member_count": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.GroupListReqDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_message_time": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.GroupMemberDTO": {
+            "type": "object",
+            "properties": {
+                "join_time": {
+                    "type": "string"
+                },
+                "mute": {
+                    "description": "0正常 1禁言",
+                    "type": "integer"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "1群主 2管理员 3普通成员",
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.GroupRequestDTO": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "type": "integer"
+                },
+                "group_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "remark": {
+                    "type": "string"
+                },
+                "sender_id": {
+                    "type": "integer"
+                },
+                "sender_name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
                 }
             }
         },
         "service.HandleFriendRequestReq": {
             "type": "object",
-            "required": ["request_id", "action"],
+            "required": [
+                "action",
+                "request_id"
+            ],
             "properties": {
                 "action": {
+                    "description": "只能传 1 或 2",
                     "type": "integer",
-                    "enum": [1, 2],
-                    "description": "1:同意 2:拒绝"
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "request_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.HandleGroupRequestReq": {
+            "type": "object",
+            "required": [
+                "action",
+                "request_id"
+            ],
+            "properties": {
+                "action": {
+                    "description": "1同意 2拒绝",
                     "type": "integer",
-                    "description": "申请记录ID"
+                    "enum": [
+                        1,
+                        2
+                    ]
+                },
+                "request_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.KickMemberReq": {
+            "type": "object",
+            "required": [
+                "group_id",
+                "user_id"
+            ],
+            "properties": {
+                "group_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -386,6 +1111,76 @@
                 }
             }
         },
+        "service.MarkMessagesReadReq": {
+            "type": "object",
+            "required": [
+                "target_id"
+            ],
+            "properties": {
+                "target_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.QuitGroupReq": {
+            "type": "object",
+            "required": [
+                "group_id"
+            ],
+            "properties": {
+                "group_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.SendFriendRequestReq": {
+            "type": "object",
+            "required": [
+                "target_id"
+            ],
+            "properties": {
+                "remark": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.SendGroupRequestReq": {
+            "type": "object",
+            "required": [
+                "group_id"
+            ],
+            "properties": {
+                "group_id": {
+                    "type": "integer"
+                },
+                "remark": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.UpdateGroupInfoReq": {
+            "type": "object",
+            "required": [
+                "group_id"
+            ],
+            "properties": {
+                "desc": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "type": "integer"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "service.UserResponseDTO": {
             "type": "object",
             "properties": {
@@ -395,74 +1190,20 @@
                 "id": {
                     "type": "integer"
                 },
+                "last_message_time": {
+                    "type": "integer"
+                },
                 "nickname": {
                     "type": "string"
                 },
+                "online": {
+                    "type": "boolean"
+                },
+                "unread_count": {
+                    "type": "integer"
+                },
                 "username": {
                     "type": "string"
-                }
-            }
-        },
-        "service.MessageDTO": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "integer",
-                    "format": "int64",
-                    "description": "创建时间戳"
-                },
-                "from_user_id": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "media": {
-                    "type": "integer",
-                    "description": "1:文本 2:图片 3:音频"
-                },
-                "to_user_id": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "integer",
-                    "description": "消息类型"
-                }
-            }
-        },
-        "service.FriendRequestDTO": {
-            "type": "object",
-            "properties": {
-                "avatar": {
-                    "type": "string",
-                    "description": "发送人头像"
-                },
-                "created_at": {
-                    "type": "string",
-                    "description": "时间"
-                },
-                "id": {
-                    "type": "integer",
-                    "description": "申请记录ID"
-                },
-                "remark": {
-                    "type": "string",
-                    "description": "附言"
-                },
-                "sender_id": {
-                    "type": "integer",
-                    "description": "发送人ID"
-                },
-                "sender_name": {
-                    "type": "string",
-                    "description": "发送人用户名"
-                },
-                "status": {
-                    "type": "integer",
-                    "description": "状态 0:待处理 1:已同意 2:已拒绝"
                 }
             }
         },
@@ -470,25 +1211,13 @@
             "type": "object",
             "properties": {
                 "code": {
-                    "type": "integer",
-                    "description": "状态码 0:成功 其他:失败"
+                    "type": "integer"
                 },
-                "data": {
-                    "type": "object",
-                    "description": "响应数据"
-                },
+                "data": {},
                 "msg": {
-                    "type": "string",
-                    "description": "提示信息"
+                    "type": "string"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "ApiKeyAuth": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
         }
     }
 }

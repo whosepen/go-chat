@@ -35,7 +35,7 @@ type UpdateUserRequest struct {
 // @Accept json
 // @Produce json
 // @Param request body RegisterRequest true "注册参数"
-// @Success 200 {object} Response{}
+// @Success 200 {object} utils.Response{}
 // @Router /user/register [post]
 func (u *UserApi) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -58,7 +58,7 @@ func (u *UserApi) Register(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body LoginRequest true "登录参数"
-// @Success 200 {object} Response{data=service.LoginResponseDTO}
+// @Success 200 {object} utils.Response{data=service.LoginResponseDTO}
 // @Router /user/login [post]
 func (u *UserApi) Login(c *gin.Context) {
 	var req LoginRequest

@@ -161,12 +161,12 @@ func HandleGroupRequest(c *gin.Context) {
 
 // GetMyGroups 获取我的群聊列表
 // @Summary 获取我的群聊列表
-// @Description 获取当前用户加入的所有群组
+// @Description 获取当前用户加入的所有群组，返回包含未读消息数和最新消息时间
 // @Tags 群组模块
 // @Security ApiKeyAuth
 // @Accept json
 // @Produce json
-// @Success 200 {object} utils.Response{data=[]service.GroupInfoDTO}
+// @Success 200 {object} utils.Response{data=[]service.GroupListReqDTO}
 // @Router /group/my-groups [get]
 func GetMyGroups(c *gin.Context) {
 	userID := c.GetUint("userID")
@@ -282,7 +282,16 @@ func GetGroupRequests(c *gin.Context) {
 	utils.Success(c, requests)
 }
 
-// 通过code查找群组
+// SearchGroupByCode 通过code查找群组
+// @Summary 通过群号搜索群组
+// @Description 根据群号（展示用ID）搜索群组信息
+// @Tags 群组模块
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param group_code query string true "群号"
+// @Success 200 {object} utils.Response{data=service.GroupInfoDTO}
+// @Router /group/search [get]
 func SearchGroupByCode(c *gin.Context) {
 	groupCode := c.Query("group_code")
 

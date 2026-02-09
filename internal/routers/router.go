@@ -1,20 +1,23 @@
 package routers
 
 import (
-	_ "go-chat/docs"
+	"go-chat/global"
 	"go-chat/internal/api"
 	"go-chat/internal/middleware"
 	"go-chat/internal/service"
 	"time"
 
 	"github.com/gin-contrib/cors"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func InitRouter() *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(ginzap.Ginzap(global.Log, time.RFC3339, true))
+	r.Use(ginzap.RecoveryWithZap(global.Log, true))
 
 	//注册CORS中间件
 	config := cors.Config{

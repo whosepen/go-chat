@@ -13,7 +13,6 @@ definitions:
   api.RegisterRequest:
     properties:
       email:
-        format: email
         type: string
       password:
         minLength: 6
@@ -24,79 +23,20 @@ definitions:
     - password
     - username
     type: object
-  api.UserInfoResponse:
+  service.CreateGroupReq:
     properties:
-      id:
-        type: integer
-      username:
+      desc:
+        description: 可选：群描述
         type: string
-    type: object
-  service.HandleFriendRequestReq:
-    properties:
-      action:
-        description: 1:同意 2:拒绝
-        enum:
-        - 1
-        - 2
-        type: integer
-      request_id:
-        description: 申请记录ID
-        type: integer
+      icon:
+        description: 可选：群头像
+        type: string
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
     required:
-    - request_id
-    - action
-    type: object
-  service.LoginResponseDTO:
-    properties:
-      nickname:
-        type: string
-      token:
-        type: string
-      username:
-        type: string
-    type: object
-  service.MessageDTO:
-    properties:
-      content:
-        type: string
-      created_at:
-        description: 创建时间戳
-        format: int64
-        type: integer
-      from_user_id:
-        type: integer
-      id:
-        type: integer
-      media:
-        description: 1:文本 2:图片 3:音频
-        type: integer
-      to_user_id:
-        type: integer
-      type:
-        description: 消息类型
-        type: integer
-    type: object
-  service.SendFriendRequestReq:
-    properties:
-      remark:
-        description: 申请附言
-        type: string
-      target_id:
-        description: 目标用户ID
-        type: integer
-    required:
-    - target_id
-    type: object
-  service.UserResponseDTO:
-    properties:
-      avatar:
-        type: string
-      id:
-        type: integer
-      nickname:
-        type: string
-      username:
-        type: string
+    - name
     type: object
   service.FriendRequestDTO:
     properties:
@@ -119,58 +59,201 @@ definitions:
         description: 发送人用户名
         type: string
       status:
-        description: 状态 0:待处理 1:已同意 2:已拒绝
+        description: 状态
         type: integer
+    type: object
+  service.GroupInfoDTO:
+    properties:
+      code:
+        type: string
+      desc:
+        type: string
+      icon:
+        type: string
+      id:
+        type: integer
+      member_count:
+        type: integer
+      name:
+        type: string
+      owner_id:
+        type: integer
+    type: object
+  service.GroupListReqDTO:
+    properties:
+      code:
+        type: string
+      icon:
+        type: string
+      id:
+        type: integer
+      last_message_time:
+        type: integer
+      name:
+        type: string
+      unread_count:
+        type: integer
+    type: object
+  service.GroupMemberDTO:
+    properties:
+      join_time:
+        type: string
+      mute:
+        description: 0正常 1禁言
+        type: integer
+      nickname:
+        type: string
+      role:
+        description: 1群主 2管理员 3普通成员
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  service.GroupRequestDTO:
+    properties:
+      avatar:
+        type: string
+      created_at:
+        type: string
+      group_id:
+        type: integer
+      group_name:
+        type: string
+      id:
+        type: integer
+      remark:
+        type: string
+      sender_id:
+        type: integer
+      sender_name:
+        type: string
+      status:
+        type: integer
+    type: object
+  service.HandleFriendRequestReq:
+    properties:
+      action:
+        description: 只能传 1 或 2
+        enum:
+        - 1
+        - 2
+        type: integer
+      request_id:
+        type: integer
+    required:
+    - action
+    - request_id
+    type: object
+  service.HandleGroupRequestReq:
+    properties:
+      action:
+        description: 1同意 2拒绝
+        enum:
+        - 1
+        - 2
+        type: integer
+      request_id:
+        type: integer
+    required:
+    - action
+    - request_id
+    type: object
+  service.KickMemberReq:
+    properties:
+      group_id:
+        type: integer
+      user_id:
+        type: integer
+    required:
+    - group_id
+    - user_id
+    type: object
+  service.LoginResponseDTO:
+    properties:
+      nickname:
+        type: string
+      token:
+        type: string
+      username:
+        type: string
+    type: object
+  service.MarkMessagesReadReq:
+    properties:
+      target_id:
+        type: integer
+    required:
+    - target_id
+    type: object
+  service.QuitGroupReq:
+    properties:
+      group_id:
+        type: integer
+    required:
+    - group_id
+    type: object
+  service.SendFriendRequestReq:
+    properties:
+      remark:
+        type: string
+      target_id:
+        type: integer
+    required:
+    - target_id
+    type: object
+  service.SendGroupRequestReq:
+    properties:
+      group_id:
+        type: integer
+      remark:
+        type: string
+    required:
+    - group_id
+    type: object
+  service.UpdateGroupInfoReq:
+    properties:
+      desc:
+        type: string
+      group_id:
+        type: integer
+      icon:
+        type: string
+      name:
+        type: string
+    required:
+    - group_id
+    type: object
+  service.UserResponseDTO:
+    properties:
+      avatar:
+        type: string
+      id:
+        type: integer
+      last_message_time:
+        type: integer
+      nickname:
+        type: string
+      online:
+        type: boolean
+      unread_count:
+        type: integer
+      username:
+        type: string
     type: object
   utils.Response:
     properties:
       code:
-        description: 状态码 0:成功 其他:失败
         type: integer
-      data:
-        description: 响应数据
-        type: object
+      data: {}
       msg:
-        description: 提示信息
         type: string
     type: object
 host: localhost:8080
 info:
   contact: {}
-  description: 即时通讯系统后端 API 文档 - 支持用户认证、好友管理、实时消息功能
+  description: 这是一个 Go 语言开发的即时通讯系统后端 API 文档
   title: GoChat API
   version: "1.0"
 paths:
-  /chat/history:
-    get:
-      consumes:
-      - application/json
-      description: 获取与指定用户的聊天历史记录，支持分页和缓存
-      parameters:
-      - description: 对方用户ID
-        in: query
-        name: target_id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/utils.Response'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/service.MessageDTO'
-                  type: array
-              type: object
-      security:
-      - ApiKeyAuth: []
-      summary: 获取聊天历史记录
-      tags:
-      - 聊天模块
   /friend/handle:
     post:
       consumes:
@@ -217,6 +300,30 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: 获取好友列表
+      tags:
+      - 好友模块
+  /friend/mark-read:
+    post:
+      consumes:
+      - application/json
+      description: 当打开某好友的聊天窗口时调用，更新该会话的已读位置
+      parameters:
+      - description: 标记已读参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.MarkMessagesReadReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 标记与某好友的消息为已读
       tags:
       - 好友模块
   /friend/request:
@@ -267,11 +374,18 @@ paths:
       summary: 获取待处理的好友申请
       tags:
       - 好友模块
-  /user/info:
-    get:
+  /group/create:
+    post:
       consumes:
       - application/json
-      description: 获取当前登录用户的详细信息
+      description: 创建一个新的群聊，创建者自动成为群主
+      parameters:
+      - description: 创建群组参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.CreateGroupReq'
       produces:
       - application/json
       responses:
@@ -282,13 +396,266 @@ paths:
             - $ref: '#/definitions/utils.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/api.UserInfoResponse'
+                  $ref: '#/definitions/service.GroupInfoDTO'
               type: object
       security:
       - ApiKeyAuth: []
-      summary: 获取当前用户信息
+      summary: 创建群组
       tags:
-      - 用户模块
+      - 群组模块
+  /group/handle-join:
+    post:
+      consumes:
+      - application/json
+      description: 同意或拒绝收到的入群申请（仅群主和管理员可操作）
+      parameters:
+      - description: 处理申请参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.HandleGroupRequestReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 处理入群申请
+      tags:
+      - 群组模块
+  /group/info:
+    get:
+      consumes:
+      - application/json
+      description: 根据群ID获取群组详细信息
+      parameters:
+      - description: 群组ID
+        in: query
+        name: group_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.GroupInfoDTO'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取群组信息
+      tags:
+      - 群组模块
+    put:
+      consumes:
+      - application/json
+      description: 修改群组名称、头像、描述（仅群主可操作）
+      parameters:
+      - description: 修改群信息参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateGroupInfoReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 修改群信息
+      tags:
+      - 群组模块
+  /group/join:
+    post:
+      consumes:
+      - application/json
+      description: 向指定群组发送入群申请
+      parameters:
+      - description: 入群申请参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.SendGroupRequestReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 发送入群申请
+      tags:
+      - 群组模块
+  /group/kick:
+    post:
+      consumes:
+      - application/json
+      description: 将指定成员踢出群聊（群主和管理员可操作）
+      parameters:
+      - description: 踢人参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.KickMemberReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 踢出群成员
+      tags:
+      - 群组模块
+  /group/members:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定群组的成员列表
+      parameters:
+      - description: 群组ID
+        in: query
+        name: group_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.GroupMemberDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取群成员列表
+      tags:
+      - 群组模块
+  /group/my-groups:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户加入的所有群组，返回包含未读消息数和最新消息时间
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.GroupListReqDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取我的群聊列表
+      tags:
+      - 群组模块
+  /group/quit:
+    post:
+      consumes:
+      - application/json
+      description: 退出指定的群聊（群主不能直接退出，需先转让或解散）
+      parameters:
+      - description: 退出群组参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.QuitGroupReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 退出群聊
+      tags:
+      - 群组模块
+  /group/requests:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户作为群主或管理员收到的待处理入群申请
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/service.GroupRequestDTO'
+                  type: array
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 获取收到的入群申请
+      tags:
+      - 群组模块
+  /group/search:
+    get:
+      consumes:
+      - application/json
+      description: 根据群号（展示用ID）搜索群组信息
+      parameters:
+      - description: 群组邀请码
+        in: query
+        name: group_code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.GroupInfoDTO'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: 通过群号搜索群组
+      tags:
+      - 群组模块
   /user/login:
     post:
       consumes:
@@ -383,12 +750,4 @@ paths:
       summary: 建立WebSocket连接
       tags:
       - 聊天模块
-schemes:
-- http
-- https
-securityDefinitions:
-  ApiKeyAuth:
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"
