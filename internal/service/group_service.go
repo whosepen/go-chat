@@ -483,6 +483,9 @@ func GetPendingGroupRequests(ctx context.Context, userID uint) ([]GroupRequestDT
 	dtos := make([]GroupRequestDTO, 0, len(requests))
 	for _, req := range requests {
 		// 获取群名称
+		if req.Sender.ID == 0 {
+			continue
+		}
 		var group models.Group
 		global.DB.WithContext(ctx).Select("name").First(&group, req.GroupID)
 
