@@ -1,3 +1,5 @@
+## 使用时将文件重命名为config.yaml
+
 server:
   port: 8080
   mode: debug # debug, release
