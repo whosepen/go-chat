@@ -45,10 +45,9 @@ func CreateGroup(ctx context.Context, ownerID uint, req CreateGroupReq) (*GroupI
 		}
 
 		member := models.GroupMember{
-			GroupID:  group.ID,
-			UserID:   ownerID,
-			Nickname: req.Name, // 默认昵称为群名
-			Role:     1,        // 群主
+			GroupID: group.ID,
+			UserID:  ownerID,
+			Role:    1, // 群主
 		}
 		if err := tx.Create(&member).Error; err != nil {
 			return err
@@ -114,8 +113,8 @@ func SearchGroupByCode(ctx context.Context, groupCode string) (*GroupInfoDTO, er
 		return GetGroupInfo(ctx, uint(cached))
 	}
 	var group models.Group
-	if err := global.DB.WithContext(ctx).
-		Where("group_code = ?", groupCode).
+	if err := global.DB.WithContext(ctx).Model(&models.Group{}).
+		Where("code = ?", groupCode).
 		First(&group).Error; err != nil {
 		return nil, ErrGroupNotFound
 	}

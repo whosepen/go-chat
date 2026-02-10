@@ -1,23 +1,19 @@
 package routers
 
 import (
-	"go-chat/global"
 	"go-chat/internal/api"
 	"go-chat/internal/middleware"
 	"go-chat/internal/service"
 	"time"
 
 	"github.com/gin-contrib/cors"
-	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func InitRouter() *gin.Engine {
-	r := gin.New()
-	r.Use(ginzap.Ginzap(global.Log, time.RFC3339, true))
-	r.Use(ginzap.RecoveryWithZap(global.Log, true))
+	r := gin.Default()
 
 	//注册CORS中间件
 	config := cors.Config{
@@ -25,7 +21,7 @@ func InitRouter() *gin.Engine {
 		AllowAllOrigins: true,
 
 		// 允许的请求方法
-		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowMethods: []string{"GET", "POST", "OPTIONS"},
 
 		// 允许的 Header (非常重要，必须包含 Authorization 和自定义 Header)
 		AllowHeaders: []string{
