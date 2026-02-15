@@ -5,8 +5,8 @@ server:
   mode: debug # debug, release
 
 mysql:
-  dsn: "[Your mysql dsn]"
-
+  dsn: "[Your mysql dsn]" 
+  
 redis:
   addr: "127.0.0.1:6379"
   password: "[Your redis password]"
@@ -17,7 +17,7 @@ jwt:
   expire: 72 # Token valid period 72 hours
 
 kafka:
-  addr: ["localhost:9092"] # 数组，生产环境通常是集群
+  addr: ["...","...","..."] # 数组，生产环境通常是集群
   topic:
     chat: "chat_message"
     group: "group_message"
@@ -25,4 +25,11 @@ kafka:
     dead: "chat_message_dead_letter"
   consumer_group: "chat_group"
   ack: "all" # all, 0, 1
-  retry: 3
+  retry: 3 # 本地重试次数
+
+minio:
+  endpoint: "[minio address]" # 图片服务api端点
+  accessKeyID: ""
+  secretAccessKey: ""
+  useSSL: false
+  buckets: ["user-avatars","chat-files","temp-files"] 

@@ -42,31 +42,6 @@ func ToUserDTO(u models.User) UserResponseDTO {
 	}
 }
 
-// ToUserDTOWithOnline 将User实体转换为DTO（带在线状态）
-func ToUserDTOWithOnline(u models.User, online bool) UserResponseDTO {
-	return UserResponseDTO{
-		ID:          u.ID,
-		Username:    u.Username,
-		Nickname:    u.Nickname,
-		Avatar:      u.Avatar,
-		Online:      online,
-		UnreadCount: 0,
-	}
-}
-
-// ToUserDTOWithUnreadCount 将User实体和未读计数转换为DTO
-func ToUserDTOWithUnreadCount(u models.User, online bool, unreadCount int, lastMsgTime int64) UserResponseDTO {
-	return UserResponseDTO{
-		ID:          u.ID,
-		Username:    u.Username,
-		Nickname:    u.Nickname,
-		Avatar:      u.Avatar,
-		Online:      online,
-		UnreadCount: unreadCount,
-		LastMsgTime: lastMsgTime,
-	}
-}
-
 // ToUserDTOs 批量转换
 func ToUserDTOs(users []models.User) []UserResponseDTO {
 	n := len(users)

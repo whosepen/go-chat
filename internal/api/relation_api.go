@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"go-chat/internal/pkg/utils"
 	"go-chat/internal/service"
 	"net/http"
@@ -155,4 +156,48 @@ func MarkMessagesRead(c *gin.Context) {
 	}
 
 	utils.SuccessWithMsg(c, "标记成功", nil)
+}
+
+// DeleteFriend 删除好友关系
+func DeleteFriend(c *gin.Context) {
+	userID := c.GetUint("userID")
+	targetID := c.GetUint("targetID")
+	err := service.DeleteFriend(c.Request.Context(), userID, targetID)
+	if err != nil {
+		if errors.Is(err, service.ErrIsNotFriend) {
+			utils.Fail(c, "他不是你的好友")
+			return
+		}
+		utils.ServerError(c, "删除失败")
+		return
+	}
+	utils.SuccessWithMsg(c, "删除成功", nil)
+}
+
+// BlockFriend 拉黑好友
+func BlockFriend(c *gin.Context) {
+	userID := c.GetUint("userID")
+	targetID := c.GetUint("targetID")
+	err := service.BlockFriend(c.Request.Context(), userID, targetID)
+	if err != nil {
+		if errors.Is(err, service.ErrIsNotFriend) {
+			utils.Fail(c, "他不是你的好友")
+			return
+		}
+		utils.ServerError(c, "加入黑名单失败")
+		return
+	}
+	utils.SuccessWithMsg(c, "加入黑名单成功", nil)
+}
+
+// UnblockFriend 将好友移出黑名单
+func UnblockFriend(c *gin.Context) {
+	userID := c.GetUint("userID")
+	targetID := c.GetUint("targetID")
+	err := service.UnblockFriend(c.Request.Context(), userID, targetID)
+	if err != nil {
+		utils.Fail(c, "对方不在黑名单中")
+		return
+	}
+	utils.SuccessWithMsg(c, "已将其移出黑名单", nil)
 }

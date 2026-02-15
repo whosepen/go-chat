@@ -22,6 +22,7 @@ var (
 	ErrCannotKickOwner   = errors.New("不能移除群主")
 	ErrCannotQuitAsOwner = errors.New("群主不能直接退出，请先转让群或解散群")
 	ErrUnknownForGroup   = errors.New("群聊业务未知错误")
+	ErrYouRNotMember     = errors.New("你不在该群中")
 )
 
 // CreateGroup 创建群组
@@ -202,6 +203,7 @@ func GetGroupMembers(ctx context.Context, groupID uint) ([]GroupMemberDTO, error
 	for _, m := range members {
 		dtos = append(dtos, GroupMemberDTO{
 			UserID:   m.UserID,
+			Username: m.Username,
 			Nickname: m.Nickname,
 			Role:     m.Role,
 			Mute:     m.Mute,
@@ -215,7 +217,9 @@ func GetGroupMembers(ctx context.Context, groupID uint) ([]GroupMemberDTO, error
 func HandleGroupRequest(ctx context.Context, userID uint, req HandleGroupRequestReq) error {
 	// 1. 查找申请记录
 	var groupReq models.GroupRequest
-	if err := global.DB.WithContext(ctx).First(&groupReq, req.RequestID).Error; err != nil {
+	if err := global.DB.WithContext(ctx).
+		Preload("Sender").
+		First(&groupReq, req.RequestID).Error; err != nil {
 		return ErrRequestNotFound
 	}
 
@@ -244,17 +248,32 @@ func HandleGroupRequest(ctx context.Context, userID uint, req HandleGroupRequest
 			return err
 		}
 
+		// 如果申请者已注销，直接结束
+		if groupReq.Sender.ID == 0 {
+			return nil
+		}
+
 		// 如果是拒绝，到这里就结束了
 		if req.Action == 2 {
 			return nil
 		}
 
+		var lastMsg models.Message
+		var lastMsgID uint
+
 		// 如果是同意，添加申请者为群成员
+		// 先将已读消息置为群中最新消息，避免入群时消息爆炸
+		global.DB.WithContext(ctx).Model(&lastMsg).
+			Where("to_user_id = ? AND type = 3", groupReq.GroupID).
+			Order("created_at DESC").Limit(1).Select("id").Find(&lastMsgID)
+
 		member := models.GroupMember{
-			GroupID:  uint(groupReq.GroupID),
-			UserID:   uint(groupReq.SenderID),
-			Nickname: "", // 默认空
-			Role:     3,  // 普通成员
+			GroupID:       uint(groupReq.GroupID),
+			UserID:        uint(groupReq.SenderID),
+			Username:      groupReq.Sender.Username,
+			Nickname:      groupReq.Sender.Nickname,
+			Role:          3, // 普通成员
+			LastReadMsgID: lastMsgID,
 		}
 		return tx.Create(&member).Error
 	})
@@ -278,14 +297,9 @@ func GetMyGroups(ctx context.Context, userID uint) ([]GroupListReqDTO, error) {
 
 		// 计算未读消息数
 		var unreadCount int64
-		if m.LastReadMsgID != 0 {
-			err := global.DB.WithContext(ctx).
-				Model(&models.Message{}).
-				Where("to_user_id = ? AND type = ? AND id > ?", group.ID, protocol.TypeGroupMsg, m.LastReadMsgID).
-				Count(&unreadCount).Error
-			if err != nil {
-				unreadCount = 0
-			}
+		unreadCount, err := GetGroupUnreadCount(ctx, userID, m.GroupID)
+		if err != nil {
+			unreadCount = 0
 		}
 		// 最新消息时间
 		var lastMsg models.Message
@@ -331,13 +345,21 @@ func GetGroupUnreadCount(ctx context.Context, userID, groupID uint) (int64, erro
 }
 
 // MarkGroupMessagesAsRead 标记群聊消息为已读
-func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint, lastMsgID uint) error {
+func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint) error {
 	// 查找该群成员记录
 	var member models.GroupMember
 	if err := global.DB.WithContext(ctx).
 		Where("group_id = ? AND user_id = ?", groupID, userID).
 		First(&member).Error; err != nil {
-		return errors.New("你不在该群中")
+		return ErrYouRNotMember
+	}
+
+	var lastMsg models.Message
+	var lastMsgID uint
+
+	if err := global.DB.WithContext(ctx).Model(&lastMsg).Where("to_user_id = ? AND type = 3", groupID).
+		Order("created_at DESC").Limit(1).Select("id").Find(&lastMsgID).Error; err != nil {
+		return nil // 无群消息
 	}
 
 	// 更新 last_read_msg_id

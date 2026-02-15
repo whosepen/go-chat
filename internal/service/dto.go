@@ -36,24 +36,24 @@ type UserResponseDTO struct {
 	LastMsgTime int64  `json:"last_message_time,omitempty"`
 }
 
-// 入参：发送申请
+// 发送好友申请
 type SendFriendRequestReq struct {
 	TargetID uint   `json:"target_id" binding:"required"`
 	Remark   string `json:"remark"`
 }
 
-// 入参：处理申请
+// 处理好友申请
 type HandleFriendRequestReq struct {
 	RequestID uint `json:"request_id" binding:"required"`
 	Action    int  `json:"action" binding:"required,oneof=1 2"` // 只能传 1 或 2
 }
 
-// 入参：标记消息已读
+// 标记消息已读
 type MarkMessagesReadReq struct {
 	TargetID uint `json:"target_id" binding:"required"`
 }
 
-// 出参：申请列表项
+// 好友申请列表项
 type FriendRequestDTO struct {
 	ID         uint   `json:"id"`          // 申请记录ID
 	SenderID   uint   `json:"sender_id"`   // 发送人ID
@@ -64,7 +64,7 @@ type FriendRequestDTO struct {
 	CreatedAt  string `json:"created_at"`  // 时间
 }
 
-// 入群申请
+// 发送入群申请
 type SendGroupRequestReq struct {
 	GroupID int    `json:"group_id" binding:"required"`
 	Remark  string `json:"remark"`
@@ -98,6 +98,10 @@ type KickMemberReq struct {
 	UserID  uint `json:"user_id" binding:"required"`
 }
 
+type MarkGroupMessagesAsReadReq struct {
+	TargetID uint `json:"target_id" binding:"required"`
+}
+
 // ============ Group 响应 DTO ============
 type GroupInfoDTO struct {
 	ID        uint   `json:"id"`
@@ -111,6 +115,7 @@ type GroupInfoDTO struct {
 
 type GroupMemberDTO struct {
 	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
 	Nickname string `json:"nickname"`
 	Role     int    `json:"role"` // 1群主 2管理员 3普通成员
 	Mute     int    `json:"mute"` // 0正常 1禁言

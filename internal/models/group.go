@@ -11,10 +11,19 @@ type Group struct {
 
 type GroupMember struct {
 	Model
-	GroupID        uint   `gorm:"index" json:"group_id"`
-	UserID         uint   `gorm:"index" json:"user_id"`
-	Nickname       string `json:"nickname"`       // 在群里的昵称
-	Role           int    `json:"role"`           // 1=群主, 2=管理员, 3=普通成员
-	Mute           int    `json:"mute"`           // 0=正常, 1=禁言
-	LastReadMsgID  uint   `json:"last_read_msg_id"` // 最后已读消息ID
+	GroupID       uint   `gorm:"index" json:"group_id"`
+	UserID        uint   `gorm:"index" json:"user_id"`
+	Username      string `json:"username"`
+	Nickname      string `json:"nickname"`         // 在群里的昵称
+	Role          int    `json:"role"`             // 1=群主, 2=管理员, 3=普通成员
+	Mute          int    `json:"mute"`             // 0=正常, 1=禁言
+	LastReadMsgID uint   `json:"last_read_msg_id"` // 最后已读消息ID
+}
+
+func (*Group) TableName() string {
+	return "groups"
+}
+
+func (*GroupMember) TableName() string {
+	return "group_members"
 }

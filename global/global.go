@@ -1,7 +1,10 @@
 package global
 
 import (
+	pb "go-chat/proto/oss"
+
 	"github.com/IBM/sarama"
+	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -14,7 +17,10 @@ var (
 	Log           *zap.Logger
 	RDB           *redis.Client
 	KafkaProducer sarama.SyncProducer
+	MinioClient   *minio.Client
 )
+
+var MinioImgHost string
 
 type KafkaTopic struct {
 	ChatMsg  string
@@ -28,3 +34,5 @@ var KAdrrs []string
 var KTopic KafkaTopic
 
 const RetryMax = 3
+
+var OssClient pb.OssServiceClient

@@ -148,7 +148,9 @@ func (c *Client) HandleMessage(msg protocol.Message) {
 
 	case protocol.TypeHeartbeat:
 		// 前端心跳间隔设置为30s，每收到消息就将存活时间重置为90s，容许至多连续丢失2次心跳
-		global.RDB.Expire(context.Background(), onlineStatusKey(c.UserID), 90*time.Second)
+		if err := global.RDB.Expire(context.Background(), onlineStatusKey(c.UserID), 90*time.Second).Err(); err != nil {
+
+		}
 
 	case protocol.TypeLogin:
 		// 登录/上线通知，目前已在连接时处理
@@ -281,8 +283,4 @@ func PushMessageToUser(msg models.Message) {
 		}
 		targetClient.Send <- replyBytes
 	}
-}
-
-func HandleHeartbeat() {
-
 }

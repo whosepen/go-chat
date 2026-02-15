@@ -297,6 +297,7 @@ func SearchGroupByCode(c *gin.Context) {
 
 	if groupCode == "" {
 		utils.Fail(c, "group code不能为空")
+		return
 	}
 
 	res, err := service.SearchGroupByCode(c.Request.Context(), groupCode)
@@ -309,3 +310,16 @@ func SearchGroupByCode(c *gin.Context) {
 }
 
 // 标记群聊信息已读
+func MarkGroupMessagesAsRead(c *gin.Context) {
+	var req service.MarkGroupMessagesAsReadReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+	userID := c.GetUint("userID")
+	if err := service.MarkGroupMessagesAsRead(c.Request.Context(), userID, req.TargetID); err != nil {
+		utils.ServerError(c, "标记失败")
+		return
+	}
+	utils.SuccessWithMsg(c, "标记成功", nil)
+}

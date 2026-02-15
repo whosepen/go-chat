@@ -85,20 +85,27 @@ func InitRouter() *gin.Engine {
 			protectGroup.GET("/friend/requests", api.GetPendingRequests) // 查看列表
 			protectGroup.GET("/friend/list", api.GetFriendList)          // 查看好友列表
 			protectGroup.POST("/friend/mark-read", api.MarkMessagesRead) // 标记消息已读
+			protectGroup.POST("/friend/delete", api.DeleteFriend)        // 删除好友
+			protectGroup.POST("/friend/block", api.BlockFriend)          // 拉黑好友
+			protectGroup.POST("/friend/unblock", api.UnblockFriend)      // 将好友移出黑名单
+			// 查看好友info
 
 			// 群组相关
-			protectGroup.POST("/group/create", api.CreateGroup)             // 创建群
-			protectGroup.GET("/group/info", api.GetGroupInfo)               // 获取群信息
-			protectGroup.GET("/group/members", api.GetGroupMembers)         // 获取群成员列表
-			protectGroup.GET("/group/search", api.SearchGroupByCode)        // 通过code获取群信息
-			protectGroup.POST("/group/join", api.SendGroupRequest)          // 发送入群申请
-			protectGroup.POST("/group/handle-join", api.HandleGroupRequest) // 处理入群申请
-			protectGroup.GET("/group/my-groups", api.GetMyGroups)           // 获取我的群聊列表 new:不再返回GroupInfoDTO，使用包含未读消息及最新消息时间的GroupListReqDTO
-			protectGroup.GET("/group/requests", api.GetGroupRequests)       // 获取收到的入群申请
-			protectGroup.POST("/group/quit", api.QuitGroup)                 // 退出群聊
-			protectGroup.POST("/group/info", api.UpdateGroupInfo)           // 修改群信息
-			protectGroup.POST("/group/kick", api.KickMember)                // 踢出成员
+			protectGroup.POST("/group/create", api.CreateGroup)                // 创建群
+			protectGroup.GET("/group/info", api.GetGroupInfo)                  // 获取群信息
+			protectGroup.GET("/group/members", api.GetGroupMembers)            // 获取群成员列表
+			protectGroup.GET("/group/search", api.SearchGroupByCode)           // 通过code获取群信息
+			protectGroup.POST("/group/join", api.SendGroupRequest)             // 发送入群申请
+			protectGroup.POST("/group/handle-join", api.HandleGroupRequest)    // 处理入群申请
+			protectGroup.GET("/group/my-groups", api.GetMyGroups)              // 获取我的群聊列表
+			protectGroup.GET("/group/requests", api.GetGroupRequests)          // 获取收到的入群申请
+			protectGroup.POST("/group/quit", api.QuitGroup)                    // 退出群聊
+			protectGroup.POST("/group/info", api.UpdateGroupInfo)              // 修改群信息
+			protectGroup.POST("/group/kick", api.KickMember)                   // 踢出成员
+			protectGroup.POST("/group/mark-read", api.MarkGroupMessagesAsRead) // 标记群聊消息已读
 
+			// media
+			protectGroup.POST("/media/upload", api.GetUploadToken) // 获取上传凭证
 		}
 
 	}

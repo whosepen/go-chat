@@ -16,24 +16,27 @@ var (
 	ErrRequestNotFound  = errors.New("申请记录不存在")
 	ErrRequestHandled   = errors.New("该申请已被处理")
 	ErrPermissionDenied = errors.New("无权处理此申请")
+	ErrBlockedByTarget  = errors.New("已被该用户拉黑")
+	ErrBlockTarget      = errors.New("你已拉黑对方")
+	ErrIsNotFriend      = errors.New("你们不是好友")
 )
 
 // --------------------------
 // 发送好友申请
 // --------------------------
 func SendFriendRequest(ctx context.Context, userID uint, req SendFriendRequestReq) error {
-	// 0. 基本校验
+	// 基本校验
 	if userID == req.TargetID {
 		return ErrAddYourself
 	}
 
-	// 1. 检查目标用户是否存在
+	// 检查目标用户是否存在
 	var target models.User
 	if err := global.DB.WithContext(ctx).First(&target, req.TargetID).Error; err != nil {
 		return errors.New("目标用户不存在")
 	}
 
-	// 2. 检查是否已经是好友 (查询 relation 表)
+	// 检查是否已经是好友 (查询 relation 表)
 	var rel models.Relation
 	err := global.DB.WithContext(ctx).
 		Where("owner_id = ? AND target_id = ? AND type = 1", userID, req.TargetID).
@@ -42,7 +45,22 @@ func SendFriendRequest(ctx context.Context, userID uint, req SendFriendRequestRe
 		return ErrAlreadyFriend // 查到了记录，说明已经是好友
 	}
 
-	// 3. 检查是否重复发送申请 (查询 friend_requests 表，状态为 0-待处理)
+	// 检查是否被对方拉黑
+	err = global.DB.WithContext(ctx).Unscoped().
+		Where("owner_id = ? AND target_id = ? AND type = 2", req.TargetID, userID).
+		First(&rel).Error
+	if err == nil {
+		return ErrBlockedByTarget // 查到了记录，说明被拉黑
+	}
+
+	err = global.DB.WithContext(ctx).Unscoped().
+		Where("owner_id = ? AND target_id = ? AND type = 2", userID, req.TargetID).
+		First(&rel).Error
+	if err == nil {
+		return ErrBlockTarget // 查到了记录，说明拉黑拉黑对方
+	}
+
+	// 检查是否重复发送申请 (查询 friend_requests 表，状态为 0-待处理)
 	var existReq models.FriendRequest
 	err = global.DB.WithContext(ctx).
 		Where("sender_id = ? AND receiver_id = ? AND status = 0", userID, req.TargetID).
@@ -86,7 +104,7 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 	return global.DB.Transaction(func(tx *gorm.DB) error {
 		// 4.1 如果是同意操作，先清理可能存在的反向申请
 		if req.Action == 1 {
-			// 检查是否已经是好友（防止重复创建）
+			// 检查是否已经是好友
 			var existingRel models.Relation
 			err := tx.Where("owner_id = ? AND target_id = ? AND type = 1",
 				friendReq.SenderID, friendReq.ReceiverID).First(&existingRel).Error
@@ -117,25 +135,38 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 			return nil
 		}
 
-		// 4.3 如果是同意 (Action == 1)，需要在 relations 表创建双向好友关系
-		// 关系 A -> B
-		r1 := models.Relation{
-			OwnerID:  friendReq.SenderID,
-			TargetID: friendReq.ReceiverID,
-			Type:     1,
-		}
-		if err := tx.Create(&r1).Error; err != nil {
-			return err
+		var rel models.Relation
+		// 如果曾经加过好友，后被删除了，直接恢复旧relation
+		if err := tx.Unscoped().Where("owner_id = ? AND target_id = ? AND type = 1",
+			friendReq.SenderID, friendReq.ReceiverID).First(&rel).Error; err == nil {
+			if err := tx.Model(&rel).Update("delete_at", nil).Error; err != nil {
+				return err
+			}
+		} else {
+			rel = models.Relation{
+				OwnerID:  friendReq.SenderID,
+				TargetID: friendReq.ReceiverID,
+				Type:     1,
+			}
+			if err := tx.Create(&rel).Error; err != nil {
+				return err
+			}
 		}
 
-		// 关系 B -> A
-		r2 := models.Relation{
-			OwnerID:  friendReq.ReceiverID,
-			TargetID: friendReq.SenderID,
-			Type:     1,
-		}
-		if err := tx.Create(&r2).Error; err != nil {
-			return err
+		if err := tx.Unscoped().Where("owner_id = ? AND target_id = ? AND type = 1",
+			friendReq.ReceiverID, friendReq.Sender).First(&rel).Error; err == nil {
+			if err := tx.Model(&rel).Update("delete_at", nil).Error; err != nil {
+				return err
+			}
+		} else {
+			rel = models.Relation{
+				OwnerID:  friendReq.ReceiverID,
+				TargetID: friendReq.SenderID,
+				Type:     1,
+			}
+			if err := tx.Create(&rel).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -286,4 +317,52 @@ func MarkMessagesAsRead(ctx context.Context, userID uint, req MarkMessagesReadRe
 		Model(&rel).
 		Where("id = ?", rel.ID).
 		Update("last_read_msg_id", lastMsg.ID).Error
+}
+
+// DeleteFriend 删除好友关系
+func DeleteFriend(ctx context.Context, userID uint, targetID uint) error {
+	var rel models.Relation
+	// 查有无好友关系(包含未删除的拉黑)
+	if err := global.DB.WithContext(ctx).
+		Where("owner_id = ? AND target_id = ? ", userID, targetID).Delete(&rel).Error; err != nil {
+		if err := global.DB.WithContext(ctx).Model(&rel).
+			Where("owner_id = ? AND target_id = ?", targetID, userID).Delete(&rel).Error; err != nil {
+			return ErrIsNotFriend
+		}
+		return nil
+	}
+	global.DB.WithContext(ctx).Model(&rel).
+		Where("owner_id = ? AND target_id = ? AND type = ?", targetID, userID, 1).Delete(&rel)
+	return nil
+}
+
+// BlockFriend 拉黑好友
+func BlockFriend(ctx context.Context, userID uint, targetID uint) error {
+	var rel models.Relation
+	if err := global.DB.WithContext(ctx).Model(&rel).
+		Where("owner_id = ? AND target_id = ? ", userID, targetID).Error; err == nil {
+		if err := global.DB.WithContext(ctx).Model(&rel).
+			Where("owner_id = ? AND target_id = ? ", userID, targetID).
+			Update("type", 2).Error; err != nil {
+			return err
+		}
+		return nil
+	}
+	return ErrIsNotFriend
+}
+
+// UnblockFriend 将好友移出黑名单
+func UnblockFriend(ctx context.Context, userID uint, targetID uint) error {
+	var rel models.Relation
+	if err := global.DB.WithContext(ctx).Model(&rel).Unscoped().
+		Where("owner_id = ? AND target_id = ? AND type = 2", userID, targetID).Error; err == nil {
+		if err := global.DB.WithContext(ctx).Model(&rel).Unscoped().
+			Where("owner_id = ? AND target_id = ? AND type = 2", userID, targetID).
+			Update("type", 1).Error; err != nil {
+			return err
+		}
+		return nil
+	} else {
+		return err
+	}
 }

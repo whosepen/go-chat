@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package oss;
+option go_package = "./proto/oss;oss";
+
+// 定义文件服务
+service OssService {
+    // 获取上传凭证 (对应 GetPresignedUploadUrl)
+    rpc GetUploadCredential (GetUploadCredentialRequest) returns (GetUploadCredentialResponse);
+}
+
+// 请求参数
+message GetUploadCredentialRequest {
+    string filename = 1;   // 原始文件名 "cat.jpg"
+    string file_type = 2;  // 业务类型 "avatar", "chat", "group"
+    int64  user_id = 3;    // 是谁传的 (用于记录日志或鉴权)
+}
+
+// 响应参数
+message GetUploadCredentialResponse {
+    string upload_url = 1; // 带签名的 PUT 链接
+    string public_url = 2; // 不带签名的访问链接
+    string key = 3;        // 文件 Key
+}

@@ -13,3 +13,6 @@ CLAUDE.md
 /data/
 /markdown/
 config/config.yaml
+/minio_data/
+/.superdesign/
+docker-compose.yml
