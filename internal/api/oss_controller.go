@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,13 +15,11 @@ import (
 func GetUploadToken(c *gin.Context) {
 	filename := c.GetString("filename")
 	fileType := c.GetString("type") // avatar, chat
-	userId, err := strconv.Atoi(c.Query("userID"))
-	if err != nil {
-		userId = c.GetInt("user_id")
-		if userId == 0 {
-			utils.Fail(c, "无效上传用户")
-			return
-		}
+
+	userID := c.GetUint("userID")
+	if userID == 0 {
+		utils.Fail(c, "无效上传用户")
+		return
 	}
 
 	// 调用远程 OSS 服务
@@ -33,7 +30,12 @@ func GetUploadToken(c *gin.Context) {
 	req := &pb.GetUploadCredentialRequest{
 		Filename: filename,
 		FileType: fileType,
-		UserId:   int64(userId), // 可以从 c.Get("userId") 获取
+		UserId:   int64(userID),
+	}
+
+	if global.OssClient == nil {
+		utils.ServerError(c, "OSS service unavailable")
+		return
 	}
 
 	resp, err := global.OssClient.GetUploadCredential(ctx, req)

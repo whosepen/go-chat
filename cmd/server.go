@@ -20,8 +20,11 @@ var serverCmd = &cobra.Command{
 		initial.InitDB()
 		initial.InitRedis()
 		initial.InitKafka()
+		initial.InitOssClient() // 初始化 OSS gRPC 客户端
 
-		service.StartConsumer()
+		// service.StartConsumer() // Consumer moved to separate microservice
+		global.Log.Info("Starting Redis Push Listener...")
+		service.StartPushListener() // Start Redis Pub/Sub listener for push notifications
 
 		// 自动迁移 (Auto Migrate)
 		if err := global.DB.AutoMigrate(

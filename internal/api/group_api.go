@@ -60,7 +60,8 @@ func GetGroupInfo(c *gin.Context) {
 		return
 	}
 
-	group, err := service.GetGroupInfo(c.Request.Context(), uint(groupID))
+	userID := c.GetUint("userID")
+	group, err := service.GetGroupInfo(c.Request.Context(), uint(groupID), userID)
 	if err != nil {
 		utils.Fail(c, err.Error())
 		return
@@ -92,7 +93,8 @@ func GetGroupMembers(c *gin.Context) {
 		return
 	}
 
-	members, err := service.GetGroupMembers(c.Request.Context(), uint(groupID))
+	userID := c.GetUint("userID")
+	members, err := service.GetGroupMembers(c.Request.Context(), uint(groupID), userID)
 	if err != nil {
 		utils.Fail(c, err.Error())
 		return

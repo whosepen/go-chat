@@ -81,15 +81,21 @@ func (api *ChatApi) GetHistory(c *gin.Context) {
 	// 解析参数，从 Query 拿 String 并转 Uint
 	targetIDStr := c.Query("target_id")
 	chatTypeStr := c.Query("chat_type")
+	lastMsgIDStr := c.Query("last_msg_id")
 
 	targetID, err1 := strconv.ParseUint(targetIDStr, 10, 64)
 	chatType, err2 := strconv.ParseUint(chatTypeStr, 10, 64) // 前端传 2(私聊)  3(群聊)
+	var lastMsgID uint64
+	if lastMsgIDStr != "" {
+		lastMsgID, _ = strconv.ParseUint(lastMsgIDStr, 10, 64)
+	}
+
 	if err1 != nil || err2 != nil {
 		utils.Fail(c, "参数错误")
 		return
 	}
 
-	messages, err := service.GetHistoryMsg(c.Request.Context(), userID, uint(targetID), uint(chatType))
+	messages, err := service.GetHistoryMsg(c.Request.Context(), userID, uint(targetID), uint(chatType), uint(lastMsgID))
 	if err != nil {
 		utils.Fail(c, "历史记录拉取失败")
 		return

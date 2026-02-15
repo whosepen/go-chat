@@ -88,7 +88,6 @@ func InitRouter() *gin.Engine {
 			protectGroup.POST("/friend/delete", api.DeleteFriend)        // 删除好友
 			protectGroup.POST("/friend/block", api.BlockFriend)          // 拉黑好友
 			protectGroup.POST("/friend/unblock", api.UnblockFriend)      // 将好友移出黑名单
-			// 查看好友info
 
 			// 群组相关
 			protectGroup.POST("/group/create", api.CreateGroup)                // 创建群

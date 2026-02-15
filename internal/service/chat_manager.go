@@ -6,6 +6,7 @@ import (
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/protocol"
+	"go-chat/internal/repository"
 	"sync"
 	"time"
 
@@ -194,15 +195,41 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		}
 	*/
 
-	// 2. 清除相关聊天记录的 Redis 缓存
+	// 2. 更新 Redis 缓存 (RPush + LTrim)
 	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID, false)
-	global.RDB.Del(context.Background(), key)
+	ctx := context.Background()
+
+	// 构造 DTO
+	dto := ToMessageDTO(&dbMsg)
+	jsonBytes, _ := json.Marshal(dto)
+
+	// 使用 Pipeline 执行 RPush + LTrim
+	pipe := global.RDB.Pipeline()
+	pipe.RPush(ctx, key, jsonBytes)
+	pipe.LTrim(ctx, key, -2000, -1) // 保留最后 2000 条
+	pipe.Expire(ctx, key, 7*24*time.Hour)
+	pipe.Exec(ctx)
 
 	// 3. 只推送给接收方，不推送给发送者自己
 	PushMessageToUser(dbMsg)
 }
 
 func (c *Client) sendGroupMessage(msg protocol.Message) {
+	// 验证群权限
+	repo := repository.NewGroupRepository()
+	ctx := context.Background()
+
+	// 1. 检查是否为群成员 (隐含了群存在的检查)
+	isMember, err := repo.IsMember(ctx, msg.TargetID, c.UserID)
+	if err != nil {
+		global.Log.Error("check group member failed", zap.Error(err))
+		return
+	}
+	if !isMember {
+		global.Log.Warn("user not in group or group not found", zap.Uint("uid", c.UserID), zap.Uint("gid", msg.TargetID))
+		return
+	}
+
 	dbMsg := models.Message{
 		FromUserID: c.UserID,
 		ToUserID:   msg.TargetID, // ToUserID 存储群ID
@@ -222,10 +249,9 @@ func (c *Client) sendGroupMessage(msg protocol.Message) {
 
 func PushMessageToGroup(msg models.Message) {
 	// 查询群成员
-	var members []models.GroupMember
-	if err := global.DB.WithContext(context.Background()).
-		Where("group_id = ?", msg.ToUserID).
-		Find(&members).Error; err != nil {
+	repo := repository.NewGroupRepository()
+	members, err := repo.GetMembers(context.Background(), msg.ToUserID)
+	if err != nil {
 		global.Log.Error("query group members failed", zap.Error(err))
 		return
 	}

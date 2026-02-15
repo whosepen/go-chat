@@ -17,6 +17,8 @@ var ossCmd = &cobra.Command{
 	Short: "Start OSS Microservice",
 	Run: func(cmd *cobra.Command, args []string) {
 		initial.InitLogger()
+		initial.InitConfig()
+
 		// 初始化 MinIO
 		initial.InitMinio()
 		fmt.Println("MinIO Initialized.")

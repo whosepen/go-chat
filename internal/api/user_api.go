@@ -43,7 +43,7 @@ func (u *UserApi) Register(c *gin.Context) {
 		utils.Fail(c, err.Error())
 		return
 	}
-	userService := service.UserService{}
+	userService := service.NewUserService()
 	if err := userService.Register(c.Request.Context(), req.Username, req.Password, req.Email); err != nil {
 		utils.Fail(c, err.Error())
 		return
@@ -66,7 +66,7 @@ func (u *UserApi) Login(c *gin.Context) {
 		utils.Fail(c, err.Error())
 		return
 	}
-	userService := service.UserService{}
+	userService := service.NewUserService()
 	resp, err := userService.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidPassword) {

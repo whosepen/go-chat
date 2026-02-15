@@ -16,36 +16,53 @@ var (
 	ErrUnexpectedChatType = errors.New("message类型错误")
 )
 
-func GetHistoryMsg(ctx context.Context, userID uint, targetID uint, chatType uint) ([]MessageDTO, error) {
+func GetHistoryMsg(ctx context.Context, userID uint, targetID uint, chatType uint, lastMsgID uint) ([]MessageDTO, error) {
 	switch chatType {
 	case 2:
-		return getPrivateHistory(ctx, userID, targetID)
+		return getPrivateHistory(ctx, userID, targetID, lastMsgID)
 	case 3:
-		return getGroupHistory(ctx, userID, targetID)
+		return getGroupHistory(ctx, userID, targetID, lastMsgID)
 	}
 	return []MessageDTO{}, ErrUnexpectedChatType
 }
 
 // ------ 拉取历史私聊消息 -----------------------------------------------------------------------
-func getPrivateHistory(ctx context.Context, userID uint, targetID uint) ([]MessageDTO, error) {
+func getPrivateHistory(ctx context.Context, userID uint, targetID uint, lastMsgID uint) ([]MessageDTO, error) {
+
+	// 1. 如果 lastMsgID > 0，说明是翻页拉取更早的消息，直接走 DB，不走 Redis
+	if lastMsgID > 0 {
+		var messages []models.Message
+		err := global.DB.Where(
+			"((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND type = ? AND id < ?",
+			userID, targetID, targetID, userID, 2, lastMsgID,
+		).Order("id desc").Limit(100).Find(&messages).Error
+		if err != nil {
+			return nil, err
+		}
+		return ToMessageDTOs(messages), nil
+	}
 
 	key := generateKey(targetID, userID, false)
 
-	// === 尝试从 Redis 获取 ===
-
+	// 2. 尝试从 Redis 获取 (获取最新的 N 条)
+	// 因为 Redis 里是 LRU 2000 条，所以直接取最后 100 条即可
 	cached, err := fetchFromRedis(ctx, key)
-	if err == nil {
+	if err == nil && len(cached) > 0 {
+		// Redis 里的顺序是 [旧 -> 新]，我们需要返回最新的 100 条
+		// fetchFromRedis 返回的是完整 list，我们需要截取
+		if len(cached) > 100 {
+			cached = cached[len(cached)-100:]
+		}
 		return cached, nil
 	}
 
-	// === Redis 未命中或出错，执行数据库查询 ===
-
+	// 3. Redis 未命中或为空，执行数据库查询 (Cache Warming)
 	var messages []models.Message
 	err = global.DB.Where(
 		"((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND type = ?",
 		userID, targetID, targetID, userID, 2, // 2 = 私聊
-	).Order("created_at desc").Limit(100).Find(&messages).Error
-	// 倒序desc，最新100条消息
+	).Order("id desc").Limit(100).Find(&messages).Error // 按 ID 倒序查最新的 100 条
+	
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +95,7 @@ func getPrivateHistory(ctx context.Context, userID uint, targetID uint) ([]Messa
 }
 
 // ------ 拉取历史群聊消息 ----------------------------------------------------------------------
-func getGroupHistory(ctx context.Context, userID, groupID uint) ([]MessageDTO, error) {
+func getGroupHistory(ctx context.Context, userID, groupID, lastMsgID uint) ([]MessageDTO, error) {
 	// [重要] 安全检查：用户必须是群成员才能看历史消息！
 	// 避免有人随便猜一个 group_id 就能偷窥群聊
 	var member models.GroupMember
@@ -86,20 +103,36 @@ func getGroupHistory(ctx context.Context, userID, groupID uint) ([]MessageDTO, e
 		return nil, ErrNotGroupMember
 	}
 
+	// 1. 翻页逻辑：直接查 DB
+	if lastMsgID > 0 {
+		var messages []models.Message
+		err := global.DB.Where(
+			"to_user_id = ? AND type = ? AND id < ?",
+			groupID, 3, lastMsgID,
+		).Order("id desc").Limit(100).Find(&messages).Error
+		if err != nil {
+			return nil, err
+		}
+		return ToMessageDTOs(messages), nil
+	}
+
 	key := generateKey(groupID, 0, true) // true=群聊
 
-	// 尝试读 Redis
+	// 2. 尝试读 Redis
 	cached, err := fetchFromRedis(ctx, key)
-	if err == nil {
+	if err == nil && len(cached) > 0 {
+		if len(cached) > 100 {
+			cached = cached[len(cached)-100:]
+		}
 		return cached, nil
 	}
 
-	// 读 DB
+	// 3. 读 DB (Cache Warming)
 	var messages []models.Message
 	global.DB.Where(
 		"to_user_id = ? AND type = ?",
 		groupID, 3, // 3 = 群聊
-	).Order("created_at desc").Limit(100).Find(&messages)
+	).Order("id desc").Limit(100).Find(&messages)
 
 	dtos := ToMessageDTOs(messages)
 

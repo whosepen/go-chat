@@ -110,53 +110,52 @@ func JoinGroup(ctx context.Context, userID int, req SendGroupRequestReq) error {
 // SearchGroupByCode 通过group code查找群
 func SearchGroupByCode(ctx context.Context, groupCode string) (*GroupInfoDTO, error) {
 	key := groupIDKey(groupCode)
+	var groupID uint
 	if cached, err := global.RDB.Get(ctx, key).Int(); err == nil {
-		return GetGroupInfo(ctx, uint(cached))
-	}
-	var group models.Group
-	if err := global.DB.WithContext(ctx).Model(&models.Group{}).
-		Where("code = ?", groupCode).
-		First(&group).Error; err != nil {
-		return nil, ErrGroupNotFound
-	}
-
-	// 统计成员数量
-	var memberCount int64
-	err := global.DB.WithContext(ctx).
-		Model(&models.GroupMember{}).Where("group_id = ?", group.ID).Count(&memberCount).Error
-
-	if err != nil {
-		global.Log.Warn("Get group members count failed", zap.Error(err))
-		return nil, err
-	}
-
-	// 异步存code-id到redis
-	go func(key string, id uint) {
-		tctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer func() {
-			if r := recover(); r != nil {
-				global.Log.Warn("set redis panic", zap.Any("err", r))
-			}
-			cancel()
-		}()
-		if err := global.RDB.Set(tctx, key, id, 6*time.Hour).Err(); err != nil {
-			global.Log.Debug("set redis error", zap.Error(err))
+		groupID = uint(cached)
+	} else {
+		var group models.Group
+		if err := global.DB.WithContext(ctx).Model(&models.Group{}).
+			Where("code = ?", groupCode).
+			First(&group).Error; err != nil {
+			return nil, ErrGroupNotFound
 		}
-	}(key, group.ID)
+		groupID = group.ID
+		// 异步存code-id到redis
+		go func(key string, id uint) {
+			tctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer func() {
+				if r := recover(); r != nil {
+					global.Log.Warn("set redis panic", zap.Any("err", r))
+				}
+				cancel()
+			}()
+			if err := global.RDB.Set(tctx, key, id, 6*time.Hour).Err(); err != nil {
+				global.Log.Debug("set redis error", zap.Error(err))
+			}
+		}(key, group.ID)
+	}
 
-	return &GroupInfoDTO{
-		ID:        group.ID,
-		Code:      group.Code,
-		Name:      group.Name,
-		Icon:      group.Icon,
-		Desc:      group.Desc,
-		OwnerID:   group.OwnerID,
-		MemberCnt: int(memberCount),
-	}, nil
+	return getGroupInfoInternal(ctx, groupID)
 }
 
-// GetGroupInfo 获取群信息
-func GetGroupInfo(ctx context.Context, groupID uint) (*GroupInfoDTO, error) {
+// GetGroupInfo 获取群信息 (需验证成员身份)
+func GetGroupInfo(ctx context.Context, groupID, userID uint) (*GroupInfoDTO, error) {
+	// 验证是否是群成员
+	var count int64
+	if err := global.DB.WithContext(ctx).Model(&models.GroupMember{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, ErrYouRNotMember
+	}
+
+	return getGroupInfoInternal(ctx, groupID)
+}
+
+func getGroupInfoInternal(ctx context.Context, groupID uint) (*GroupInfoDTO, error) {
 	var group models.Group
 	if err := global.DB.WithContext(ctx).First(&group, groupID).Error; err != nil {
 		return nil, ErrGroupNotFound
@@ -183,8 +182,20 @@ func GetGroupInfo(ctx context.Context, groupID uint) (*GroupInfoDTO, error) {
 	}, nil
 }
 
+
 // GetGroupMembers 获取群成员列表
-func GetGroupMembers(ctx context.Context, groupID uint) ([]GroupMemberDTO, error) {
+func GetGroupMembers(ctx context.Context, groupID, userID uint) ([]GroupMemberDTO, error) {
+	// 验证是否是群成员
+	var count int64
+	if err := global.DB.WithContext(ctx).Model(&models.GroupMember{}).
+		Where("group_id = ? AND user_id = ?", groupID, userID).
+		Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, ErrYouRNotMember
+	}
+
 	// 检查群是否存在
 	var group models.Group
 	if err := global.DB.WithContext(ctx).First(&group, groupID).Error; err != nil {

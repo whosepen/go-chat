@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"go-chat/global"
-	"log"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 func InitMinio() {
 	endpoint := viper.GetString("minio.endpoint") // MinIO 服务地址
+	if endpoint == "" {
+		global.Log.Fatal("no endpoint in config")
+	}
 	accessKeyID := viper.GetString("minio.accessKeyID")
 	secretAccessKey := viper.GetString("secretAccessKey")
 	useSSL := viper.GetBool("minio.useSSL") // config为空默认为false
@@ -24,7 +27,7 @@ func InitMinio() {
 		Secure: useSSL,
 	})
 	if err != nil {
-		log.Fatalln(err)
+		global.Log.Fatal("minio客户端初始化失败", zap.Error(err))
 	}
 
 	global.MinioImgHost = imgHost

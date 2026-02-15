@@ -12,40 +12,48 @@ type Response struct {
 	Data interface{} `json:"data,omitempty"`
 }
 
-// Success 成功响应 200;0
-func Success(c *gin.Context, data interface{}) {
+// Result 通用响应
+func Result(c *gin.Context, code ResultCode, msg string, data interface{}) {
 	c.JSON(http.StatusOK, Response{
-		Code: 0,
-		Msg:  "success",
+		Code: int(code),
+		Msg:  msg,
 		Data: data,
 	})
+}
+
+// Success 成功响应 200;0
+func Success(c *gin.Context, data interface{}) {
+	Result(c, SuccessCode, GetMsg(SuccessCode), data)
 }
 
 // SuccessWithMsg 成功响应（带自定义消息）_;0
 func SuccessWithMsg(c *gin.Context, msg string, data interface{}) {
-	c.JSON(http.StatusOK, Response{
-		Code: 0,
-		Msg:  msg,
-		Data: data,
-	})
+	Result(c, SuccessCode, msg, data)
 }
 
 // Fail 预期内失败响应 200;-1
 func Fail(c *gin.Context, msg string) {
-	c.JSON(http.StatusOK, Response{
-		Code: -1,
-		Msg:  msg,
-		Data: nil,
-	})
+	Result(c, FailCode, msg, nil)
 }
 
 // FailWithCode 失败响应（带状态码） _;_
+// Deprecated: Use Error instead if possible
 func FailWithCode(c *gin.Context, httpCode int, msg string) {
 	c.JSON(httpCode, Response{
 		Code: httpCode,
 		Msg:  msg,
 		Data: nil,
 	})
+}
+
+// Error 业务错误响应 200;code
+func Error(c *gin.Context, code ResultCode) {
+	Result(c, code, GetMsg(code), nil)
+}
+
+// ErrorWithMsg 业务错误响应（自定义消息） 200;code
+func ErrorWithMsg(c *gin.Context, code ResultCode, msg string) {
+	Result(c, code, msg, nil)
 }
 
 // Unauthorized 未授权响应 401;401

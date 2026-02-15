@@ -10,9 +10,10 @@
 vendor/
 .claude/
 CLAUDE.md
-/data/
+/.data/
 /markdown/
 config/config.yaml
 /minio_data/
 /.superdesign/
 docker-compose.yml
+app

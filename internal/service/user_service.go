@@ -6,6 +6,7 @@ import (
 	"go-chat/global"
 	"go-chat/internal/models"
 	"go-chat/internal/pkg/utils"
+	"go-chat/internal/repository"
 	"time"
 
 	"go.uber.org/zap"
@@ -18,12 +19,22 @@ var (
 	ErrOccupiedUsername = errors.New("username is already exists")
 )
 
-type UserService struct{}
+type UserService struct {
+	repo *repository.UserRepository
+}
+
+func NewUserService() *UserService {
+	return &UserService{
+		repo: repository.NewUserRepository(),
+	}
+}
 
 func (s *UserService) Register(ctx context.Context, username, password, email string) error {
-	var user models.User
-	result := global.DB.WithContext(ctx).Select("id").Where("username = ?", username).First(&user)
-	if result.RowsAffected > 0 {
+	exists, err := s.repo.Exists(ctx, username)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return ErrOccupiedUsername
 	}
 
@@ -38,15 +49,14 @@ func (s *UserService) Register(ctx context.Context, username, password, email st
 		Nickname: username,
 		Status:   1,
 	}
-	if err := global.DB.WithContext(ctx).Create(&newUser).Error; err != nil {
+	if err := s.repo.Create(ctx, &newUser); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *UserService) Login(ctx context.Context, username, password string) (*LoginResponseDTO, error) {
-	var user models.User
-	err := global.DB.WithContext(ctx).Where("username = ?", username).First(&user).Error
+	user, err := s.repo.FindByUsername(ctx, username)
 	if err != nil {
 		return nil, ErrInvalidPassword
 	}
@@ -71,9 +81,7 @@ func (s *UserService) Login(ctx context.Context, username, password string) (*Lo
 			}
 			cancel()
 		}()
-		err := global.DB.WithContext(timeOut).
-			Model(&user).
-			Update("last_login", time.Now()).Error
+		err := s.repo.UpdateLastLogin(timeOut, user.ID)
 		if err != nil {
 			global.Log.Error("update last_login failed", //修改失败只写日志，不影响主要服务
 				zap.Error(err),
@@ -84,8 +92,9 @@ func (s *UserService) Login(ctx context.Context, username, password string) (*Lo
 }
 
 func GetFullUserInfo(ctx context.Context, uid uint) (UserFullInfoDTO, error) {
-	var user models.User
-	if err := global.DB.WithContext(ctx).First(&user, uid).Error; err != nil {
+	repo := repository.NewUserRepository()
+	user, err := repo.FindByID(ctx, uid)
+	if err != nil {
 		return UserFullInfoDTO{}, err
 	}
 	return UserFullInfoDTO{
