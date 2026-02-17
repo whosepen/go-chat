@@ -156,6 +156,9 @@ func (c *Client) HandleMessage(msg protocol.Message) {
 	case protocol.TypeLogin:
 		// 登录/上线通知，目前已在连接时处理
 
+	case protocol.TypeWebRTC:
+		c.sendSignalMessage(msg)
+
 	default:
 		global.Log.Warn("unknown message type", zap.Int("type", msg.Type))
 	}
@@ -170,8 +173,15 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Media:      1,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if ok := repository.NewRelationRepository().IsFriend(ctx, c.UserID, msg.TargetID); !ok {
+		global.Log.Info("消息被对方拒收")
+		return
+	}
+
 	// 1. 直接入库
-	if err := global.DB.WithContext(context.Background()).Create(&dbMsg).Error; err != nil {
+	if err := global.DB.WithContext(ctx).Create(&dbMsg).Error; err != nil {
 		global.Log.Error("save message failed", zap.Error(err))
 		return
 	}
@@ -197,7 +207,6 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 
 	// 2. 更新 Redis 缓存 (RPush + LTrim)
 	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID, false)
-	ctx := context.Background()
 
 	// 构造 DTO
 	dto := ToMessageDTO(&dbMsg)
@@ -245,6 +254,24 @@ func (c *Client) sendGroupMessage(msg protocol.Message) {
 		Value: sarama.ByteEncoder(value),
 	}
 	global.KafkaProducer.SendMessage(kafkaMsg)
+}
+
+func (c *Client) sendSignalMessage(msg protocol.Message) {
+	Manager.Lock.RLock()
+	targetClient, ok := Manager.Clients[msg.TargetID]
+	Manager.Lock.RUnlock()
+
+	if ok {
+		reply := protocol.Reply{
+			FromID:   c.UserID,
+			Content:  msg.Content, // 这里面是 JSON 格式的 SDP/Candidate
+			Type:     protocol.TypeWebRTC,
+			SendTime: time.Now().Unix(),
+		}
+
+		replyBytes, _ := json.Marshal(reply)
+		targetClient.Send <- replyBytes
+	}
 }
 
 func PushMessageToGroup(msg models.Message) {

@@ -6,6 +6,7 @@ const (
 	TypeLogin     = 1 // 登录/上线通知
 	TypeSingleMsg = 2 // 单聊消息
 	TypeGroupMsg  = 3 // 群聊消息
+	TypeWebRTC    = 4 // 新增：WebRTC 信令消息
 )
 
 // Message 客户端发送给服务器的消息结构
