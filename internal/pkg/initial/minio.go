@@ -17,9 +17,13 @@ func InitMinio() {
 		global.Log.Fatal("no endpoint in config")
 	}
 	accessKeyID := viper.GetString("minio.accessKeyID")
-	secretAccessKey := viper.GetString("secretAccessKey")
+	secretAccessKey := viper.GetString("minio.secretAccessKey")
 	useSSL := viper.GetBool("minio.useSSL") // config为空默认为false
 	imgHost := viper.GetString("minio.imgHost")
+
+	if secretAccessKey == "" || accessKeyID == "" {
+		global.Log.Warn("匿名模式启动")
+	}
 
 	// 初始化客户端
 	minioClient, err := minio.New(endpoint, &minio.Options{

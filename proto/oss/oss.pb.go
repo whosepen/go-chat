@@ -143,6 +143,110 @@ func (x *GetUploadCredentialResponse) GetKey() string {
 	return ""
 }
 
+type GetDownloadCredentialRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`                           // 文件 Key
+	FileType      string                 `protobuf:"bytes,2,opt,name=file_type,json=fileType,proto3" json:"file_type,omitempty"` // 业务类型
+	UserId        int64                  `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`      // 用户ID
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDownloadCredentialRequest) Reset() {
+	*x = GetDownloadCredentialRequest{}
+	mi := &file_proto_oss_oss_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDownloadCredentialRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDownloadCredentialRequest) ProtoMessage() {}
+
+func (x *GetDownloadCredentialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_oss_oss_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDownloadCredentialRequest.ProtoReflect.Descriptor instead.
+func (*GetDownloadCredentialRequest) Descriptor() ([]byte, []int) {
+	return file_proto_oss_oss_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GetDownloadCredentialRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *GetDownloadCredentialRequest) GetFileType() string {
+	if x != nil {
+		return x.FileType
+	}
+	return ""
+}
+
+func (x *GetDownloadCredentialRequest) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type GetDownloadCredentialResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DownloadUrl   string                 `protobuf:"bytes,1,opt,name=download_url,json=downloadUrl,proto3" json:"download_url,omitempty"` // 带签名的 GET 链接
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDownloadCredentialResponse) Reset() {
+	*x = GetDownloadCredentialResponse{}
+	mi := &file_proto_oss_oss_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDownloadCredentialResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDownloadCredentialResponse) ProtoMessage() {}
+
+func (x *GetDownloadCredentialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_oss_oss_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDownloadCredentialResponse.ProtoReflect.Descriptor instead.
+func (*GetDownloadCredentialResponse) Descriptor() ([]byte, []int) {
+	return file_proto_oss_oss_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetDownloadCredentialResponse) GetDownloadUrl() string {
+	if x != nil {
+		return x.DownloadUrl
+	}
+	return ""
+}
+
 var File_proto_oss_oss_proto protoreflect.FileDescriptor
 
 const file_proto_oss_oss_proto_rawDesc = "" +
@@ -157,10 +261,17 @@ const file_proto_oss_oss_proto_rawDesc = "" +
 	"upload_url\x18\x01 \x01(\tR\tuploadUrl\x12\x1d\n" +
 	"\n" +
 	"public_url\x18\x02 \x01(\tR\tpublicUrl\x12\x10\n" +
-	"\x03key\x18\x03 \x01(\tR\x03key2f\n" +
+	"\x03key\x18\x03 \x01(\tR\x03key\"f\n" +
+	"\x1cGetDownloadCredentialRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1b\n" +
+	"\tfile_type\x18\x02 \x01(\tR\bfileType\x12\x17\n" +
+	"\auser_id\x18\x03 \x01(\x03R\x06userId\"B\n" +
+	"\x1dGetDownloadCredentialResponse\x12!\n" +
+	"\fdownload_url\x18\x01 \x01(\tR\vdownloadUrl2\xc6\x01\n" +
 	"\n" +
 	"OssService\x12X\n" +
-	"\x13GetUploadCredential\x12\x1f.oss.GetUploadCredentialRequest\x1a .oss.GetUploadCredentialResponseB\x11Z\x0f./proto/oss;ossb\x06proto3"
+	"\x13GetUploadCredential\x12\x1f.oss.GetUploadCredentialRequest\x1a .oss.GetUploadCredentialResponse\x12^\n" +
+	"\x15GetDownloadCredential\x12!.oss.GetDownloadCredentialRequest\x1a\".oss.GetDownloadCredentialResponseB\x11Z\x0f./proto/oss;ossb\x06proto3"
 
 var (
 	file_proto_oss_oss_proto_rawDescOnce sync.Once
@@ -174,16 +285,20 @@ func file_proto_oss_oss_proto_rawDescGZIP() []byte {
 	return file_proto_oss_oss_proto_rawDescData
 }
 
-var file_proto_oss_oss_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_oss_oss_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_oss_oss_proto_goTypes = []any{
-	(*GetUploadCredentialRequest)(nil),  // 0: oss.GetUploadCredentialRequest
-	(*GetUploadCredentialResponse)(nil), // 1: oss.GetUploadCredentialResponse
+	(*GetUploadCredentialRequest)(nil),    // 0: oss.GetUploadCredentialRequest
+	(*GetUploadCredentialResponse)(nil),   // 1: oss.GetUploadCredentialResponse
+	(*GetDownloadCredentialRequest)(nil),  // 2: oss.GetDownloadCredentialRequest
+	(*GetDownloadCredentialResponse)(nil), // 3: oss.GetDownloadCredentialResponse
 }
 var file_proto_oss_oss_proto_depIdxs = []int32{
 	0, // 0: oss.OssService.GetUploadCredential:input_type -> oss.GetUploadCredentialRequest
-	1, // 1: oss.OssService.GetUploadCredential:output_type -> oss.GetUploadCredentialResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: oss.OssService.GetDownloadCredential:input_type -> oss.GetDownloadCredentialRequest
+	1, // 2: oss.OssService.GetUploadCredential:output_type -> oss.GetUploadCredentialResponse
+	3, // 3: oss.OssService.GetDownloadCredential:output_type -> oss.GetDownloadCredentialResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -200,7 +315,7 @@ func file_proto_oss_oss_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_oss_oss_proto_rawDesc), len(file_proto_oss_oss_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

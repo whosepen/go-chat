@@ -170,15 +170,15 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		ToUserID:   msg.TargetID,
 		Content:    msg.Content,
 		Type:       msg.Type,
-		Media:      1,
+		Media:      msg.Media,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if ok := repository.NewRelationRepository().IsFriend(ctx, c.UserID, msg.TargetID); !ok {
-		global.Log.Info("消息被对方拒收")
-		return
-	}
+	// if ok := repository.NewRelationRepository().IsFriend(ctx, c.UserID, msg.TargetID); !ok {
+	// 	global.Log.Info("消息被对方拒收")
+	// 	return
+	// }
 
 	// 1. 直接入库
 	if err := global.DB.WithContext(ctx).Create(&dbMsg).Error; err != nil {
@@ -244,7 +244,7 @@ func (c *Client) sendGroupMessage(msg protocol.Message) {
 		ToUserID:   msg.TargetID, // ToUserID 存储群ID
 		Content:    msg.Content,
 		Type:       msg.Type,
-		Media:      1,
+		Media:      msg.Media,
 	}
 
 	// 发送到 Kafka，由 Consumer 处理群发

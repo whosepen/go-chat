@@ -109,3 +109,43 @@ func (u *UserApi) GetFullUserInfo(c *gin.Context) {
 		utils.Success(c, user)
 	}
 }
+
+// UpdateUserInfo 更新用户个人信息
+func (u *UserApi) UpdateUserInfo(c *gin.Context) {
+	var req service.UpdateUserInfoReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+
+	userID := c.GetUint("userID")
+
+	if err := service.UpdateUserInfo(c.Request.Context(), userID, req); err != nil {
+		utils.Fail(c, err.Error())
+		return
+	}
+
+	utils.SuccessWithMsg(c, "个人信息已更新", nil)
+}
+
+// UpdatePassword 修改用户密码
+func (u *UserApi) UpdatePassword(c *gin.Context) {
+	var req service.UpdatePasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+
+	userID := c.GetUint("userID")
+
+	if err := service.UpdateUserPassword(c.Request.Context(), userID, req); err != nil {
+		if errors.Is(err, service.ErrInvalidPassword) {
+			utils.Fail(c, "密码错误")
+		} else {
+			utils.Fail(c, err.Error())
+			return
+		}
+	}
+
+	utils.SuccessWithMsg(c, "密码更改成功", nil)
+}

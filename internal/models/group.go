@@ -11,9 +11,9 @@ type Group struct {
 
 type GroupMember struct {
 	Model
+	User          User   `gorm:"foreignKey:UserID" json:"-"`
 	GroupID       uint   `gorm:"index" json:"group_id"`
 	UserID        uint   `gorm:"index" json:"user_id"`
-	Username      string `json:"username"`
 	Nickname      string `json:"nickname"`         // 在群里的昵称
 	Role          int    `json:"role"`             // 1=群主, 2=管理员, 3=普通成员
 	Mute          int    `json:"mute"`             // 0=正常, 1=禁言

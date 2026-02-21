@@ -325,3 +325,17 @@ func MarkGroupMessagesAsRead(c *gin.Context) {
 	}
 	utils.SuccessWithMsg(c, "标记成功", nil)
 }
+
+func UpdateGroupMemberInfo(c *gin.Context) {
+	var req service.UpdateGroupMemberInfoReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+	userID := c.GetUint("userID")
+	if err := service.UpdateGroupMemberInfo(c.Request.Context(), userID, req); err != nil {
+		utils.ServerError(c, "修改失败")
+		return
+	}
+	utils.SuccessWithMsg(c, "修改成功", nil)
+}

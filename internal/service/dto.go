@@ -9,6 +9,18 @@ type UserFullInfoDTO struct {
 	Phone    string `json:"phone"`    // 手机号
 }
 
+type UpdateUserInfoReq struct {
+	Nickname string `json:"nickname"` // 昵称
+	Avatar   string `json:"avatar"`   // 头像URL
+	Email    string `json:"email"`    // 邮箱
+	Phone    string `json:"phone"`    // 手机号
+}
+
+type UpdatePasswordReq struct {
+	OldPassword string `gorm:"size:255" json:"old_password"`
+	NewPassword string `gorm:"size:255" json:"new_password"`
+}
+
 // MessageDTO 消息数据传输对象（用于 API 响应）
 type MessageDTO struct {
 	ID         uint   `json:"id"`
@@ -32,8 +44,16 @@ type UserResponseDTO struct {
 	Nickname    string `json:"nickname"`
 	Avatar      string `json:"avatar"`
 	Online      bool   `json:"online"`
+	Email       string `json:"email"`
 	UnreadCount int    `json:"unread_count"`
 	LastMsgTime int64  `json:"last_message_time,omitempty"`
+}
+
+type FriendInfoDTO struct {
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Email    string `json:"email"`
 }
 
 // 发送好友申请
@@ -50,6 +70,11 @@ type HandleFriendRequestReq struct {
 
 // 标记消息已读
 type MarkMessagesReadReq struct {
+	TargetID uint `json:"target_id" binding:"required"`
+}
+
+// 删除以及拉黑、解除拉黑请求
+type DeleteFriendReq struct {
 	TargetID uint `json:"target_id" binding:"required"`
 }
 
@@ -114,6 +139,7 @@ type GroupInfoDTO struct {
 }
 
 type GroupMemberDTO struct {
+	Avatar   string `json:"avatar"`
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
 	Nickname string `json:"nickname"`
@@ -141,4 +167,11 @@ type GroupListReqDTO struct {
 	Icon        string `json:"icon"`
 	UnreadCount int    `json:"unread_count"`
 	LastMsgTime int64  `json:"last_message_time,omitempty"`
+}
+
+type UpdateGroupMemberInfoReq struct {
+	GroupID     uint   `json:"group_id"`
+	TargetID    uint   `json:"target_id"`
+	NewNickname string `json:"new_nickname"`
+	NewRole     int    `json:"new_role"`
 }

@@ -17,6 +17,7 @@ var (
 	ErrInvalidPassword  = errors.New("username or password error")
 	ErrGenerateToken    = errors.New("generate token failed")
 	ErrOccupiedUsername = errors.New("username is already exists")
+	ErrUserNotFound     = errors.New("用户不存在")
 )
 
 type UserService struct {
@@ -104,4 +105,59 @@ func GetFullUserInfo(ctx context.Context, uid uint) (UserFullInfoDTO, error) {
 		Avatar:   user.Avatar,
 		Email:    user.Email,
 	}, nil
+}
+
+// 更新用户信息
+func UpdateUserInfo(ctx context.Context, userID uint, req UpdateUserInfoReq) error {
+	var user models.User
+	if err := global.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
+		return ErrUserNotFound
+	}
+
+	// 3. 更新群信息
+	updates := make(map[string]interface{})
+	if req.Nickname != "" {
+		updates["nickname"] = req.Nickname
+	}
+	if req.Avatar != "" {
+		updates["avatar"] = req.Avatar
+	}
+	if req.Email != "" {
+		updates["email"] = req.Email
+	}
+	if req.Phone != "" {
+		updates["phone"] = req.Phone
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return global.DB.WithContext(ctx).Model(&user).Updates(updates).Error
+}
+
+// 验证密码
+func PasswordIsRight(ctx context.Context, userID uint, password string) bool {
+	var user *models.User
+	user, err := repository.NewUserRepository().FindByID(ctx, userID)
+	if err != nil {
+		return false
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return false
+	}
+	return true
+}
+
+// 更改密码
+func UpdateUserPassword(ctx context.Context, userID uint, req UpdatePasswordReq) error {
+	if ok := PasswordIsRight(ctx, userID, req.OldPassword); !ok {
+		return ErrInvalidPassword
+	}
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return repository.NewUserRepository().UpdatePassword(ctx, userID, string(hashPassword))
+
 }

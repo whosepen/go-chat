@@ -3,6 +3,8 @@
 基于 Go + Gin + MySQL + Redis + Kafka + WebSocket 的分布式即时通讯后端服务。
 本项目已完成微服务化改造，实现了核心业务解耦、配置规范化及高并发消息处理。
 
+前端项目仓库：[github.com/whosepen](https://github.com/whosepen/go-chat)
+
 ## 技术栈
 
 - **Web 框架**: Gin

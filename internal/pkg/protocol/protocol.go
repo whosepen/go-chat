@@ -14,6 +14,7 @@ type Message struct {
 	Type     int    `json:"type"`      // 消息类型
 	TargetID uint   `json:"target_id"` // 接收者ID (如果是群聊则是Group ID)
 	Content  string `json:"content"`   // 消息内容
+	Media    int    `json:"media"`
 }
 
 // Reply 服务器推送给客户端的消息结构

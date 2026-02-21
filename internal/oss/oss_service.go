@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 
 	"go-chat/global"
 	pb "go-chat/proto/oss" // 生成的 proto 代码
@@ -40,6 +41,7 @@ func (s *OssGrpcServer) GetUploadCredential(ctx context.Context, req *pb.GetUplo
 	expiry := time.Minute * 10
 	presignedURL, err := global.MinioClient.PresignedPutObject(ctx, bucketName, objectName, expiry)
 	if err != nil {
+		global.Log.Warn("凭证生成失败:", zap.Error(err))
 		return nil, err
 	}
 
@@ -50,5 +52,30 @@ func (s *OssGrpcServer) GetUploadCredential(ctx context.Context, req *pb.GetUplo
 		UploadUrl: presignedURL.String(),
 		PublicUrl: publicUrl,
 		Key:       objectName,
+	}, nil
+}
+
+func (s *OssGrpcServer) GetDownloadCredential(ctx context.Context, req *pb.GetDownloadCredentialRequest) (*pb.GetDownloadCredentialResponse, error) {
+	// 1. 业务分桶逻辑
+	var bucketName string
+	switch req.FileType {
+	case "avatar":
+		bucketName = "user-avatars"
+	case "chat":
+		bucketName = "chat-files"
+	default:
+		bucketName = "temp-files"
+	}
+
+	// 2. 生成下载凭证
+	expiry := time.Minute * 10
+	presignedURL, err := global.MinioClient.PresignedGetObject(ctx, bucketName, req.Key, expiry, nil)
+	if err != nil {
+		global.Log.Warn("下载凭证生成失败:", zap.Error(err))
+		return nil, err
+	}
+
+	return &pb.GetDownloadCredentialResponse{
+		DownloadUrl: presignedURL.String(),
 	}, nil
 }

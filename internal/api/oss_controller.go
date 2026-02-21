@@ -11,10 +11,18 @@ import (
 	pb "go-chat/proto/oss"
 )
 
+type GetUploadUrlReq struct {
+	Filename string `json:"filename"`
+	Type     string `json:"type"`
+}
+
 // GetUploadToken
 func GetUploadToken(c *gin.Context) {
-	filename := c.GetString("filename")
-	fileType := c.GetString("type") // avatar, chat
+	var urlreq GetUploadUrlReq
+	if err := c.ShouldBindJSON(&urlreq); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
 
 	userID := c.GetUint("userID")
 	if userID == 0 {
@@ -28,8 +36,8 @@ func GetUploadToken(c *gin.Context) {
 	defer cancel()
 
 	req := &pb.GetUploadCredentialRequest{
-		Filename: filename,
-		FileType: fileType,
+		Filename: urlreq.Filename,
+		FileType: urlreq.Type,
 		UserId:   int64(userID),
 	}
 
@@ -50,5 +58,49 @@ func GetUploadToken(c *gin.Context) {
 		"put_url":  resp.UploadUrl, // 前端用 PUT 上传
 		"file_url": resp.PublicUrl, // 上传成功后用于显示的 URL
 		"key":      resp.Key,       // 文件的 Key
+	})
+}
+
+type GetDownloadUrlReq struct {
+	Key  string `json:"key"`
+	Type string `json:"type"`
+}
+
+// GetDownloadToken
+func GetDownloadToken(c *gin.Context) {
+	var urlreq GetDownloadUrlReq
+	if err := c.ShouldBindJSON(&urlreq); err != nil {
+		utils.Fail(c, "参数错误")
+		return
+	}
+
+	userID := c.GetUint("userID")
+	if userID == 0 {
+		utils.Fail(c, "无效用户")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	req := &pb.GetDownloadCredentialRequest{
+		Key:      urlreq.Key,
+		FileType: urlreq.Type,
+		UserId:   int64(userID),
+	}
+
+	if global.OssClient == nil {
+		utils.ServerError(c, "OSS service unavailable")
+		return
+	}
+
+	resp, err := global.OssClient.GetDownloadCredential(ctx, req)
+	if err != nil {
+		utils.ServerError(c, "Failed to get download token")
+		return
+	}
+
+	utils.Success(c, gin.H{
+		"download_url": resp.DownloadUrl,
 	})
 }

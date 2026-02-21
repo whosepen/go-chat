@@ -110,6 +110,18 @@ func GetFriendList(c *gin.Context) {
 	utils.Success(c, friendList)
 }
 
+func GetBlockList(c *gin.Context) {
+	userID := c.GetUint("userID")
+
+	friendList, err := service.GetBlockList(c.Request.Context(), userID)
+	if err != nil {
+		utils.ServerError(c, "获取拉黑列表失败")
+		return
+	}
+
+	utils.Success(c, friendList)
+}
+
 // GetPendingRequests 获取申请列表
 // @Summary 获取待处理的好友申请
 // @Description 获取当前用户收到的待处理好友申请列表
@@ -161,8 +173,12 @@ func MarkMessagesRead(c *gin.Context) {
 // DeleteFriend 删除好友关系
 func DeleteFriend(c *gin.Context) {
 	userID := c.GetUint("userID")
-	targetID := c.GetUint("targetID")
-	err := service.DeleteFriend(c.Request.Context(), userID, targetID)
+	var req service.DeleteFriendReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.FailWithCode(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+	err := service.DeleteFriend(c.Request.Context(), userID, req.TargetID)
 	if err != nil {
 		if errors.Is(err, service.ErrIsNotFriend) {
 			utils.Fail(c, "他不是你的好友")
@@ -177,8 +193,12 @@ func DeleteFriend(c *gin.Context) {
 // BlockFriend 拉黑好友
 func BlockFriend(c *gin.Context) {
 	userID := c.GetUint("userID")
-	targetID := c.GetUint("targetID")
-	err := service.BlockFriend(c.Request.Context(), userID, targetID)
+	var req service.DeleteFriendReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.FailWithCode(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+	err := service.BlockFriend(c.Request.Context(), userID, req.TargetID)
 	if err != nil {
 		if errors.Is(err, service.ErrIsNotFriend) {
 			utils.Fail(c, "他不是你的好友")
@@ -193,11 +213,31 @@ func BlockFriend(c *gin.Context) {
 // UnblockFriend 将好友移出黑名单
 func UnblockFriend(c *gin.Context) {
 	userID := c.GetUint("userID")
-	targetID := c.GetUint("targetID")
-	err := service.UnblockFriend(c.Request.Context(), userID, targetID)
+	var req service.DeleteFriendReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.FailWithCode(c, http.StatusBadRequest, "参数错误")
+		return
+	}
+	err := service.UnblockFriend(c.Request.Context(), userID, req.TargetID)
 	if err != nil {
 		utils.Fail(c, "对方不在黑名单中")
 		return
 	}
 	utils.SuccessWithMsg(c, "已将其移出黑名单", nil)
+}
+
+// GetFriendInfo 获取好友详细信息
+func GetFriendInfo(c *gin.Context) {
+	userID := c.GetUint("userID")
+	target := c.GetUint("targetID")
+	info, err := service.GetFriendInfo(c.Request.Context(), userID, target)
+	if err != nil {
+		if errors.Is(err, service.ErrIsNotFriend) {
+			utils.Fail(c, "他不是你的好友")
+			return
+		}
+		utils.ServerError(c, "查询失败")
+		return
+	}
+	utils.Success(c, info)
 }

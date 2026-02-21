@@ -22,7 +22,8 @@ var (
 	ErrCannotKickOwner   = errors.New("不能移除群主")
 	ErrCannotQuitAsOwner = errors.New("群主不能直接退出，请先转让群或解散群")
 	ErrUnknownForGroup   = errors.New("群聊业务未知错误")
-	ErrYouRNotMember     = errors.New("你不在该群中")
+	ErrTargetNotMember   = errors.New("目标不在该群中")
+	ErrIllegalOperation  = errors.New("非法操作")
 )
 
 // CreateGroup 创建群组
@@ -32,6 +33,12 @@ func CreateGroup(ctx context.Context, ownerID uint, req CreateGroupReq) (*GroupI
 		OwnerID: ownerID,
 		Desc:    req.Desc,
 		Icon:    req.Icon,
+	}
+
+	var user models.User
+
+	if err := global.DB.WithContext(ctx).First(&user, ownerID).Error; err != nil {
+		return nil, err
 	}
 
 	// 事务：建群 + 把自己加进去 + 生成群号
@@ -46,9 +53,10 @@ func CreateGroup(ctx context.Context, ownerID uint, req CreateGroupReq) (*GroupI
 		}
 
 		member := models.GroupMember{
-			GroupID: group.ID,
-			UserID:  ownerID,
-			Role:    1, // 群主
+			GroupID:  group.ID,
+			UserID:   ownerID,
+			Nickname: user.Nickname,
+			Role:     1, // 群主
 		}
 		if err := tx.Create(&member).Error; err != nil {
 			return err
@@ -149,7 +157,7 @@ func GetGroupInfo(ctx context.Context, groupID, userID uint) (*GroupInfoDTO, err
 		return nil, err
 	}
 	if count == 0 {
-		return nil, ErrYouRNotMember
+		return nil, ErrNotInGroup
 	}
 
 	return getGroupInfoInternal(ctx, groupID)
@@ -182,7 +190,6 @@ func getGroupInfoInternal(ctx context.Context, groupID uint) (*GroupInfoDTO, err
 	}, nil
 }
 
-
 // GetGroupMembers 获取群成员列表
 func GetGroupMembers(ctx context.Context, groupID, userID uint) ([]GroupMemberDTO, error) {
 	// 验证是否是群成员
@@ -193,7 +200,7 @@ func GetGroupMembers(ctx context.Context, groupID, userID uint) ([]GroupMemberDT
 		return nil, err
 	}
 	if count == 0 {
-		return nil, ErrYouRNotMember
+		return nil, ErrNotInGroup
 	}
 
 	// 检查群是否存在
@@ -204,17 +211,20 @@ func GetGroupMembers(ctx context.Context, groupID, userID uint) ([]GroupMemberDT
 
 	var members []models.GroupMember
 	if err := global.DB.WithContext(ctx).
+		Preload("User").
 		Where("group_id = ?", groupID).
 		Order("role ASC, id ASC").
-		Find(&members).Error; err != nil {
+		Find(&members).
+		Error; err != nil {
 		return nil, err
 	}
 
 	dtos := make([]GroupMemberDTO, 0, len(members))
 	for _, m := range members {
 		dtos = append(dtos, GroupMemberDTO{
+			Avatar:   m.User.Avatar,
 			UserID:   m.UserID,
-			Username: m.Username,
+			Username: m.User.Username,
 			Nickname: m.Nickname,
 			Role:     m.Role,
 			Mute:     m.Mute,
@@ -281,7 +291,6 @@ func HandleGroupRequest(ctx context.Context, userID uint, req HandleGroupRequest
 		member := models.GroupMember{
 			GroupID:       uint(groupReq.GroupID),
 			UserID:        uint(groupReq.SenderID),
-			Username:      groupReq.Sender.Username,
 			Nickname:      groupReq.Sender.Nickname,
 			Role:          3, // 普通成员
 			LastReadMsgID: lastMsgID,
@@ -362,7 +371,7 @@ func MarkGroupMessagesAsRead(ctx context.Context, userID, groupID uint) error {
 	if err := global.DB.WithContext(ctx).
 		Where("group_id = ? AND user_id = ?", groupID, userID).
 		First(&member).Error; err != nil {
-		return ErrYouRNotMember
+		return ErrNotInGroup
 	}
 
 	var lastMsg models.Message
@@ -534,4 +543,50 @@ func GetPendingGroupRequests(ctx context.Context, userID uint) ([]GroupRequestDT
 		})
 	}
 	return dtos, nil
+}
+
+// UpdateGroupMemberInfo 修改群组成员群内信息
+func UpdateGroupMemberInfo(ctx context.Context, userID uint, req UpdateGroupMemberInfoReq) error {
+	var operator models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", req.GroupID, userID).
+		First(&operator).
+		Error; err != nil {
+		return ErrNotInGroup
+	}
+
+	var groupMember models.GroupMember
+	if err := global.DB.WithContext(ctx).
+		Where("group_id = ? AND user_id = ?", req.GroupID, req.TargetID).
+		First(&groupMember).
+		Error; err != nil {
+		return ErrTargetNotMember
+	}
+
+	updates := make(map[string]interface{})
+	if req.NewNickname != "" {
+		if operator.ID == groupMember.ID {
+			updates["nickname"] = req.NewNickname
+		} else if operator.Role == 1 || operator.Role == 2 {
+			updates["nickname"] = req.NewNickname
+		} else {
+			return ErrNotGroupAdmin
+		}
+	}
+
+	if req.NewRole != 0 {
+		if operator.Role != 1 {
+			return ErrNotGroupOwner
+		} else if groupMember.Role == 2 || groupMember.Role == 3 {
+			updates["role"] = req.NewRole
+		} else {
+		}
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return global.DB.WithContext(ctx).Model(&groupMember).Updates(updates).Error
+
 }

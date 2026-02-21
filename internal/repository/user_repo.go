@@ -47,3 +47,7 @@ func (r *UserRepository) Exists(ctx context.Context, username string) (bool, err
 	}
 	return count > 0, nil
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID uint, password string) error {
+	return global.DB.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Update("password", password).Error
+}

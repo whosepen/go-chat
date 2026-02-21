@@ -17,7 +17,7 @@ func InitOssClient() {
 		addr = "localhost:50051"
 	}
 
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		global.Log.Error("did not connect to oss service", zap.Error(err))
 		return

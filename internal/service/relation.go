@@ -5,6 +5,7 @@ import (
 	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
+	"go-chat/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -281,6 +282,7 @@ func GetFriendList(ctx context.Context, userID uint) ([]UserResponseDTO, error) 
 			Nickname:    user.Nickname,
 			Avatar:      user.Avatar,
 			Online:      online,
+			Email:       user.Email,
 			UnreadCount: int(unreadCount),
 			LastMsgTime: lastMsgTime,
 		})
@@ -332,7 +334,9 @@ func DeleteFriend(ctx context.Context, userID uint, targetID uint) error {
 		return nil
 	}
 	global.DB.WithContext(ctx).Model(&rel).
-		Where("owner_id = ? AND target_id = ? AND type = ?", targetID, userID, 1).Delete(&rel)
+		Where("owner_id = ? AND target_id = ?", targetID, userID).Delete(&rel)
+	global.DB.WithContext(ctx).Model(&rel).
+		Where("owner_id = ? AND target_id = ?", userID, targetID).Delete(&rel)
 	return nil
 }
 
@@ -365,4 +369,77 @@ func UnblockFriend(ctx context.Context, userID uint, targetID uint) error {
 	} else {
 		return err
 	}
+}
+
+// GetFriendInfo 获取好友详细信息
+func GetFriendInfo(ctx context.Context, userID uint, targetID uint) (FriendInfoDTO, error) {
+	if ok := repository.NewRelationRepository().IsFriend(ctx, userID, targetID); !ok {
+		return FriendInfoDTO{}, ErrIsNotFriend
+	}
+	var repo *models.User
+
+	repo, err := repository.NewUserRepository().FindByID(ctx, targetID)
+	if err != nil {
+		return FriendInfoDTO{}, err
+	}
+	return FriendInfoDTO{
+		Username: repo.Username,
+		Nickname: repo.Nickname,
+		Avatar:   repo.Avatar,
+		Email:    repo.Email,
+	}, nil
+
+}
+
+// GetBlockList 获取拉黑列表
+func GetBlockList(ctx context.Context, userID uint) ([]UserResponseDTO, error) {
+	// 1. 查询用户的所有拉黑关系记录
+	var relations []models.Relation
+	err := global.DB.WithContext(ctx).
+		Where("owner_id = ? AND type = 2", userID).
+		Find(&relations).Error
+	if err != nil {
+		return nil, err
+	}
+
+	dtos := make([]UserResponseDTO, 0, len(relations))
+
+	for _, rel := range relations {
+		// 2. 获取好友信息
+		var user models.User
+		if err := global.DB.WithContext(ctx).First(&user, rel.TargetID).Error; err != nil {
+			continue // 好友不存在，跳过
+		}
+
+		// 4. 计算未读消息数量：查询该好友发给我的消息中，msg_id > last_read_msg_id 的数量
+		var unreadCount int64
+		global.DB.WithContext(ctx).
+			Model(&models.Message{}).
+			Where("from_user_id = ? AND to_user_id = ? AND id > ?", rel.TargetID, userID, rel.LastReadMsgID).
+			Count(&unreadCount)
+
+		// 5. 获取最后一条消息时间
+		var lastMsg models.Message
+		lastMsgTime := int64(0)
+		global.DB.WithContext(ctx).
+			Where("(from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)",
+				userID, rel.TargetID, rel.TargetID, userID).
+			Order("id DESC").
+			First(&lastMsg)
+		if lastMsg.ID > 0 {
+			lastMsgTime = lastMsg.CreatedAt.UnixMilli()
+		}
+
+		dtos = append(dtos, UserResponseDTO{
+			ID:          user.ID,
+			Username:    user.Username,
+			Nickname:    user.Nickname,
+			Avatar:      user.Avatar,
+			Online:      false,
+			UnreadCount: int(unreadCount),
+			LastMsgTime: lastMsgTime,
+		})
+	}
+
+	return dtos, nil
 }

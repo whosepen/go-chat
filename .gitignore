@@ -17,3 +17,4 @@ config/config.yaml
 /.superdesign/
 docker-compose.yml
 app
+/data/

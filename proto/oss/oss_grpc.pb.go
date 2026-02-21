@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OssService_GetUploadCredential_FullMethodName = "/oss.OssService/GetUploadCredential"
+	OssService_GetUploadCredential_FullMethodName   = "/oss.OssService/GetUploadCredential"
+	OssService_GetDownloadCredential_FullMethodName = "/oss.OssService/GetDownloadCredential"
 )
 
 // OssServiceClient is the client API for OssService service.
@@ -30,6 +31,8 @@ const (
 type OssServiceClient interface {
 	// 获取上传凭证 (对应 GetPresignedUploadUrl)
 	GetUploadCredential(ctx context.Context, in *GetUploadCredentialRequest, opts ...grpc.CallOption) (*GetUploadCredentialResponse, error)
+	// 获取下载凭证 (对应 GetPresignedDownloadUrl)
+	GetDownloadCredential(ctx context.Context, in *GetDownloadCredentialRequest, opts ...grpc.CallOption) (*GetDownloadCredentialResponse, error)
 }
 
 type ossServiceClient struct {
@@ -50,6 +53,16 @@ func (c *ossServiceClient) GetUploadCredential(ctx context.Context, in *GetUploa
 	return out, nil
 }
 
+func (c *ossServiceClient) GetDownloadCredential(ctx context.Context, in *GetDownloadCredentialRequest, opts ...grpc.CallOption) (*GetDownloadCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDownloadCredentialResponse)
+	err := c.cc.Invoke(ctx, OssService_GetDownloadCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OssServiceServer is the server API for OssService service.
 // All implementations must embed UnimplementedOssServiceServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *ossServiceClient) GetUploadCredential(ctx context.Context, in *GetUploa
 type OssServiceServer interface {
 	// 获取上传凭证 (对应 GetPresignedUploadUrl)
 	GetUploadCredential(context.Context, *GetUploadCredentialRequest) (*GetUploadCredentialResponse, error)
+	// 获取下载凭证 (对应 GetPresignedDownloadUrl)
+	GetDownloadCredential(context.Context, *GetDownloadCredentialRequest) (*GetDownloadCredentialResponse, error)
 	mustEmbedUnimplementedOssServiceServer()
 }
 
@@ -70,6 +85,9 @@ type UnimplementedOssServiceServer struct{}
 
 func (UnimplementedOssServiceServer) GetUploadCredential(context.Context, *GetUploadCredentialRequest) (*GetUploadCredentialResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUploadCredential not implemented")
+}
+func (UnimplementedOssServiceServer) GetDownloadCredential(context.Context, *GetDownloadCredentialRequest) (*GetDownloadCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDownloadCredential not implemented")
 }
 func (UnimplementedOssServiceServer) mustEmbedUnimplementedOssServiceServer() {}
 func (UnimplementedOssServiceServer) testEmbeddedByValue()                    {}
@@ -110,6 +128,24 @@ func _OssService_GetUploadCredential_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OssService_GetDownloadCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDownloadCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OssServiceServer).GetDownloadCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OssService_GetDownloadCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OssServiceServer).GetDownloadCredential(ctx, req.(*GetDownloadCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OssService_ServiceDesc is the grpc.ServiceDesc for OssService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +156,10 @@ var OssService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUploadCredential",
 			Handler:    _OssService_GetUploadCredential_Handler,
+		},
+		{
+			MethodName: "GetDownloadCredential",
+			Handler:    _OssService_GetDownloadCredential_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

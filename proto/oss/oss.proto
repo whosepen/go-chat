@@ -7,6 +7,8 @@ option go_package = "./proto/oss;oss";
 service OssService {
     // 获取上传凭证 (对应 GetPresignedUploadUrl)
     rpc GetUploadCredential (GetUploadCredentialRequest) returns (GetUploadCredentialResponse);
+    // 获取下载凭证 (对应 GetPresignedDownloadUrl)
+    rpc GetDownloadCredential (GetDownloadCredentialRequest) returns (GetDownloadCredentialResponse);
 }
 
 // 请求参数
@@ -21,4 +23,14 @@ message GetUploadCredentialResponse {
     string upload_url = 1; // 带签名的 PUT 链接
     string public_url = 2; // 不带签名的访问链接
     string key = 3;        // 文件 Key
+}
+
+message GetDownloadCredentialRequest {
+    string key = 1;        // 文件 Key
+    string file_type = 2;  // 业务类型
+    int64  user_id = 3;    // 用户ID
+}
+
+message GetDownloadCredentialResponse {
+    string download_url = 1; // 带签名的 GET 链接
 }
