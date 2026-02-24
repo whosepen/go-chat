@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/redis/go-redis/v9" // Import redis
 	"go.uber.org/zap"
 )
 
@@ -40,6 +41,7 @@ func StartConsumer() {
 	// 注意：Consume 是阻塞的，需要在一个 goroutine 中运行
 	// 这里我们需要消费多个 Topic
 	topics := []string{
+		global.KTopic.ChatMsg, // 新增：监听私聊
 		global.KTopic.GroupMsg,
 		global.KTopic.Retry,
 		global.KTopic.Dead,
@@ -48,6 +50,7 @@ func StartConsumer() {
 	// 定义 Handler
 	handler := &ConsumerGroupHandler{
 		Handlers: map[string]func([]byte) error{
+			global.KTopic.ChatMsg:  handlePrivateMessage, // 新增：处理私聊
 			global.KTopic.GroupMsg: handleGroupMessage,
 			global.KTopic.Retry:    handleMessageWithDelayRetry,
 			global.KTopic.Dead:     handleDeadLetter,
@@ -99,6 +102,32 @@ func (h *ConsumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 	return nil
 }
 
+// ------ handlePrivateMessage 处理私聊消息 ------------------------------------------------------
+func handlePrivateMessage(value []byte) error {
+	var dbMsg models.Message
+	if err := json.Unmarshal(value, &dbMsg); err != nil {
+		republish(global.KTopic.Dead, value)
+		return nil
+	}
+
+	// 1. 写入 MySQL (包含重试逻辑)
+	for i := 0; i < global.RetryMax; i++ {
+		err := global.DB.Create(&dbMsg).Error
+		if err == nil {
+			// 写入成功
+			// 注意：根据新架构，私聊不再写入 Redis 缓存
+			// 也不需要 Push，因为 API Server 发送成功时已经 Push 了
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 重试失败 -> Retry Queue
+	global.Log.Warn("Private message retry failed", zap.Any("msg", dbMsg))
+	republish(global.KTopic.Retry, value)
+	return nil
+}
+
 // ------ handleGroupMessage 处理群聊消息 --------------------------------------------------------
 func handleGroupMessage(value []byte) error {
 	var dbMsg models.Message
@@ -114,22 +143,34 @@ func handleGroupMessage(value []byte) error {
 		err := global.DB.Create(&dbMsg).Error
 		if err == nil {
 			// 成功！
-			// 1. 将新消息追加到 Redis List 尾部，并维持长度 <= 2000
+			// 1. 将新消息追加到 Redis Stream
 			key := generateKey(dbMsg.ToUserID, 0, true)
 			ctx := context.Background()
 
 			// 构造 DTO
 			dto := ToMessageDTO(&dbMsg)
-			jsonBytes, _ := json.Marshal(dto)
+			jsonBytes, _ := json.Marshal(dto) // 存入 Stream 的是一个 JSON 字符串
 
-			// 使用 Pipeline 执行 RPush + LTrim
-			pipe := global.RDB.Pipeline()
-			pipe.RPush(ctx, key, jsonBytes)
-			pipe.LTrim(ctx, key, -2000, -1)       // 保留最后 2000 条
-			pipe.Expire(ctx, key, 7*24*time.Hour) // 刷新过期时间
-			pipe.Exec(ctx)
+			// XADD key * data json_string
+			// MaxLen ~= 2000
+			err := global.RDB.XAdd(ctx, &redis.XAddArgs{
+				Stream: key,
+				MaxLen: 2000, // 限制长度
+				Approx: true, // 限制长度 (近似修剪)
+				Values: map[string]interface{}{
+					"data": jsonBytes,
+				},
+			}).Err()
+
+			if err != nil {
+				global.Log.Error("redis stream xadd failed", zap.Error(err))
+			}
 
 			// 2. 推送给群成员 (通过 Redis Pub/Sub 通知 Server)
+			// 注意：虽然 API Server 已经尝试直推，但如果是多实例部署，
+			// 这里的 Pub/Sub 依然有必要，用于通知其他 Server 实例推送给它们维护的连接。
+			// 如果是单机部署，这步其实是重复的，可以优化。
+			// 为了保险起见，保留 Pub/Sub 广播。
 			PublishPushConsumer(dbMsg, true)
 			return nil
 		}
@@ -149,27 +190,42 @@ func handleMessageWithDelayRetry(value []byte) error {
 	time.Sleep(5 * time.Second)
 
 	var dbMsg models.Message
-	json.Unmarshal(value, &dbMsg)
+	if err := json.Unmarshal(value, &dbMsg); err != nil {
+		republish(global.KTopic.Dead, value)
+		return nil
+	}
 
 	// 这里通常只试 1 次，或者也可以少量重试
 	err := global.DB.Create(&dbMsg).Error
 	if err == nil {
 		// 终于成功了
-		key := generateKey(dbMsg.ToUserID, dbMsg.FromUserID, true)
-		ctx := context.Background()
+		// 根据消息类型决定后续操作
+		if dbMsg.Type == 3 { // 群聊消息 -> 写 Redis Stream
+			key := generateKey(dbMsg.ToUserID, 0, true)
+			ctx := context.Background()
 
-		// 构造 DTO
-		dto := ToMessageDTO(&dbMsg)
-		jsonBytes, _ := json.Marshal(dto)
+			// 构造 DTO
+			dto := ToMessageDTO(&dbMsg)
+			jsonBytes, _ := json.Marshal(dto)
 
-		// 使用 Pipeline 执行 RPush + LTrim
-		pipe := global.RDB.Pipeline()
-		pipe.RPush(ctx, key, jsonBytes)
-		pipe.LTrim(ctx, key, -2000, -1) // 保留最后 2000 条
-		pipe.Expire(ctx, key, 7*24*time.Hour)
-		pipe.Exec(ctx)
+			// XADD
+			global.RDB.XAdd(ctx, &redis.XAddArgs{
+				Stream: key,
+				MaxLen: 2000, // 限制长度
+				Approx: true,
+				Values: map[string]interface{}{
+					"data": jsonBytes,
+				},
+			})
 
-		PublishPushConsumer(dbMsg, false)
+			// 触发推送 (虽然晚了5秒，但还是得推一下)
+			PublishPushConsumer(dbMsg, true)
+
+		} else if dbMsg.Type == 2 { // 私聊消息 -> 仅 DB，无 Redis
+			// 触发推送
+			PublishPushConsumer(dbMsg, false)
+		}
+
 		return nil
 	}
 

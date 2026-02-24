@@ -6,9 +6,6 @@ import (
 	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
-	"time"
-
-	"go.uber.org/zap"
 )
 
 var (
@@ -28,70 +25,25 @@ func GetHistoryMsg(ctx context.Context, userID uint, targetID uint, chatType uin
 
 // ------ 拉取历史私聊消息 -----------------------------------------------------------------------
 func getPrivateHistory(ctx context.Context, userID uint, targetID uint, lastMsgID uint) ([]MessageDTO, error) {
+	// [Refactor] 私聊不再查询 Redis，直接走 DB (因为私聊 Redis 缓存已被移除)
+	// 无论是否翻页，统一查 DB，前端自行缓存
 
-	// 1. 如果 lastMsgID > 0，说明是翻页拉取更早的消息，直接走 DB，不走 Redis
-	if lastMsgID > 0 {
-		var messages []models.Message
-		err := global.DB.Where(
-			"((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND type = ? AND id < ?",
-			userID, targetID, targetID, userID, 2, lastMsgID,
-		).Order("id desc").Limit(100).Find(&messages).Error
-		if err != nil {
-			return nil, err
-		}
-		return ToMessageDTOs(messages), nil
-	}
-
-	key := generateKey(targetID, userID, false)
-
-	// 2. 尝试从 Redis 获取 (获取最新的 N 条)
-	// 因为 Redis 里是 LRU 2000 条，所以直接取最后 100 条即可
-	cached, err := fetchFromRedis(ctx, key)
-	if err == nil && len(cached) > 0 {
-		// Redis 里的顺序是 [旧 -> 新]，我们需要返回最新的 100 条
-		// fetchFromRedis 返回的是完整 list，我们需要截取
-		if len(cached) > 100 {
-			cached = cached[len(cached)-100:]
-		}
-		return cached, nil
-	}
-
-	// 3. Redis 未命中或为空，执行数据库查询 (Cache Warming)
-	var messages []models.Message
-	err = global.DB.Where(
+	query := global.DB.Where(
 		"((from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?)) AND type = ?",
-		userID, targetID, targetID, userID, 2, // 2 = 私聊
-	).Order("id desc").Limit(100).Find(&messages).Error // 按 ID 倒序查最新的 100 条
-	
-	if err != nil {
+		userID, targetID, targetID, userID, 2,
+	)
+
+	if lastMsgID > 0 {
+		query = query.Where("id < ?", lastMsgID)
+	}
+
+	var messages []models.Message
+	if err := query.Order("id desc").Limit(100).Find(&messages).Error; err != nil {
 		return nil, err
 	}
-	if len(messages) == 0 {
-		return []MessageDTO{}, nil
-	}
 
-	// DTO已反转list，dtos{[旧]->[新]}
-	dtos := ToMessageDTOs(messages)
-
-	// === 异步回写 Redis ===
-	go func() {
-		// 容错
-		defer func() {
-			if r := recover(); r != nil {
-				global.Log.Error("Async redis panic", zap.Any("err", r))
-			}
-		}()
-
-		// 使用新的 Context (防止主请求结束导致 Context Canceled)
-		// 设置 5秒超时，防止 Goroutine 僵死
-		asyncCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		// 直接传入 dtos
-		saveToRedis(asyncCtx, key, dtos)
-	}()
-
-	return dtos, nil
+	// DB查出来是倒序的 [New -> Old]，需要反转为正序 [Old -> New]
+	return ToMessageDTOs(messages), nil
 }
 
 // ------ 拉取历史群聊消息 ----------------------------------------------------------------------
@@ -118,77 +70,69 @@ func getGroupHistory(ctx context.Context, userID, groupID, lastMsgID uint) ([]Me
 
 	key := generateKey(groupID, 0, true) // true=群聊
 
-	// 2. 尝试读 Redis
-	cached, err := fetchFromRedis(ctx, key)
-	if err == nil && len(cached) > 0 {
-		if len(cached) > 100 {
-			cached = cached[len(cached)-100:]
+	// 2. 尝试读 Redis Stream (XRevRange)
+	// 如果 lastMsgID=0，拉取最新的 100 条
+	// 如果 lastMsgID>0，暂不走 Stream 索引 (因为 Stream ID 是时间戳格式，跟 DB ID 不兼容，需要映射)
+	// 简单起见：只有拉最新消息走 Stream，翻页走 DB
+	if lastMsgID == 0 {
+		cached, err := fetchFromStream(ctx, key, 100)
+		if err == nil && len(cached) > 0 {
+			// Stream 本身是正序的，fetchFromStream 返回正序
+			return cached, nil
 		}
-		return cached, nil
 	}
 
 	// 3. 读 DB (Cache Warming)
 	var messages []models.Message
-	global.DB.Where(
-		"to_user_id = ? AND type = ?",
-		groupID, 3, // 3 = 群聊
-	).Order("id desc").Limit(100).Find(&messages)
+	query := global.DB.Where("to_user_id = ? AND type = ?", groupID, 3)
+	if lastMsgID > 0 {
+		query = query.Where("id < ?", lastMsgID)
+	}
 
-	dtos := ToMessageDTOs(messages)
+	if err := query.Order("id desc").Limit(100).Find(&messages).Error; err != nil {
+		return nil, err
+	}
 
-	// === 异步回写 Redis ===
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				global.Log.Error("Async redis panic", zap.Any("err", r))
-			}
-		}()
-		asyncCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		saveToRedis(asyncCtx, key, dtos)
-	}()
+	dtos := ToMessageDTOs(messages) // 反转为正序
+
+	// 只有当拉取最新消息且 Redis 为空时，才回写 (Cache Warming)
+	// 注意：回写 Stream 比较麻烦，因为需要保证顺序和 ID，
+	// 这里简化处理：如果不命中，就不回写了，等待新消息自然流入 Stream。
+	// 或者全量回写比较耗时，暂略。
 
 	return dtos, nil
 }
 
 // ------ 提取公共 Redis 操作 -------------------------------------------------------------
 
-// 从 Redis 拉取并反序列化
-func fetchFromRedis(ctx context.Context, key string) ([]MessageDTO, error) {
-	// 拉取全部 list
-	resultList, err := global.RDB.LRange(ctx, key, 0, -1).Result()
-	if err != nil || len(resultList) == 0 {
+// 从 Redis Stream 拉取消息 (XRevRange)
+// 返回正序 [Old -> New]
+func fetchFromStream(ctx context.Context, key string, limit int) ([]MessageDTO, error) {
+	// XRevRange key + - COUNT limit
+	// 从最新(+)到最旧(-)
+	cmd := global.RDB.XRevRangeN(ctx, key, "+", "-", int64(limit))
+	streams, err := cmd.Result()
+
+	if err != nil {
+		return nil, err
+	}
+	if len(streams) == 0 {
 		return nil, errors.New("cache miss")
 	}
 
-	dtos := make([]MessageDTO, 0, len(resultList))
-	for _, val := range resultList {
+	n := len(streams)
+	dtos := make([]MessageDTO, n)
+
+	// Stream 返回的是 [New -> Old]，我们需要反转为 [Old -> New]
+	for i, msg := range streams {
+		val, ok := msg.Values["data"].(string)
+		if !ok {
+			continue
+		}
 		var dto MessageDTO
 		if json.Unmarshal([]byte(val), &dto) == nil {
-			dtos = append(dtos, dto)
+			dtos[n-1-i] = dto
 		}
 	}
 	return dtos, nil
-}
-
-// 写入 Redis
-func saveToRedis(ctx context.Context, key string, dtos []MessageDTO) {
-	if len(dtos) == 0 {
-		return
-	}
-
-	pipe := global.RDB.Pipeline()
-	// 先删掉旧的 Key 防止数据错乱
-	pipe.Del(ctx, key)
-
-	for _, dto := range dtos {
-		jsonBytes, _ := json.Marshal(dto)
-		pipe.RPush(ctx, key, jsonBytes)
-	}
-	pipe.Expire(ctx, key, time.Hour) // 设置过期时间
-
-	if _, err := pipe.Exec(ctx); err != nil {
-		global.Log.Error("async redis save failed", zap.Error(err))
-	}
-
 }

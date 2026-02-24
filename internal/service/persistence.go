@@ -1,5 +1,8 @@
 package service
 
+// persistent模式已被废弃，代码仅保留做参考，不建议使用
+// 建议使用 Kafka 作为消息队列，实现异步持久化
+
 import (
 	"context"
 	"encoding/json"
@@ -12,7 +15,7 @@ import (
 
 const (
 	PersistQueue  = "chat:msg:queue"
-	BatchSize     = 500                   // 提高 Batch Size，减少 IO 次数
+	BatchSize     = 500                    // 提高 Batch Size，减少 IO 次数
 	FlushInterval = 500 * time.Millisecond // 缩短兜底刷新时间
 	WriteInterval = 50 * time.Millisecond  // 【关键】两次写入之间的强制最小间隔 (削峰)
 )
@@ -26,7 +29,7 @@ func StartBatchPersister() {
 
 		// 预分配内存，避免反复扩容
 		buffer := make([]models.Message, 0, BatchSize)
-		
+
 		// 兜底定时器
 		ticker := time.NewTicker(FlushInterval)
 		defer ticker.Stop()
@@ -42,7 +45,7 @@ func StartBatchPersister() {
 				// 阻塞读取 Redis 队列
 				// 使用较短的超时时间，保证能及时响应 ticker
 				result, err := global.RDB.BRPop(context.Background(), 200*time.Millisecond, PersistQueue).Result()
-				
+
 				if err == nil {
 					// 成功取到数据
 					var msg models.Message
@@ -76,12 +79,12 @@ func flushBuffer(buffer *[]models.Message) {
 
 	// 批量插入
 	err := global.DB.Create(buffer).Error
-	
+
 	cost := time.Since(start)
-	
+
 	if err != nil {
-		global.Log.Error("Batch insert failed", 
-			zap.Error(err), 
+		global.Log.Error("Batch insert failed",
+			zap.Error(err),
 			zap.Int("count", count),
 			zap.Duration("cost", cost),
 		)

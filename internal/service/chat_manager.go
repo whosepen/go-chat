@@ -172,41 +172,32 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Type:       msg.Type,
 		Media:      msg.Media,
 		Model: models.Model{
-			CreatedAt: time.Now(), // 必须显式设置时间，因为不再经过DB自动生成
+			CreatedAt: time.Now(), // 必须显式设置时间
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// 1. 发送到 Kafka ChatMsg Topic (异步落库)
+	value, _ := json.Marshal(dbMsg)
+	kafkaMsg := &sarama.ProducerMessage{
+		Topic: global.KTopic.ChatMsg,
+		Value: sarama.ByteEncoder(value),
+	}
 
-	// 1. 投递到 Redis 待持久化队列 (Async Write Behind)
-	msgBytes, err := json.Marshal(dbMsg)
+	// Kafka Producer (ACK=1 or ALL, based on config)
+	_, _, err := global.KafkaProducer.SendMessage(kafkaMsg)
 	if err != nil {
-		global.Log.Error("marshal message failed", zap.Error(err))
-		return
-	}
-	if err := global.RDB.LPush(ctx, PersistQueue, msgBytes).Err(); err != nil {
-		global.Log.Error("push message to persist queue failed", zap.Error(err))
-		// 如果 Redis 写失败，可以考虑降级写 DB 或报错
+		global.Log.Error("send private message to kafka failed", zap.Error(err))
+		// 发送失败，不推送给对方，返回错误
 		return
 	}
 
-	// 2. 更新 Redis 缓存 (RPush + LTrim)
-	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID, false)
-
-	// 构造 DTO
-	dto := ToMessageDTO(&dbMsg)
-	jsonBytes, _ := json.Marshal(dto)
-
-	// 使用 Pipeline 执行 RPush + LTrim
-	pipe := global.RDB.Pipeline()
-	pipe.RPush(ctx, key, jsonBytes)
-	pipe.LTrim(ctx, key, -2000, -1) // 保留最后 2000 条
-	pipe.Expire(ctx, key, 7*24*time.Hour)
-	pipe.Exec(ctx)
-
-	// 3. 只推送给接收方，不推送给发送者自己
+	// 2. [Direct Push] 成功投递到 Kafka 后，直接推送给在线用户
+	// 无需等待 Consumer 落库完成，实现低延迟
 	PushMessageToUser(dbMsg)
+
+	// 3. [Optional] 更新发送者自己的 Redis 缓存（如果需要）
+	// 这里可以省略，由 Consumer 统一处理，或者为了体验立即写入
+	// 但根据新架构，私聊不再强制依赖 Redis 缓存，可由前端本地存储
 }
 
 func (c *Client) sendGroupMessage(msg protocol.Message) {
@@ -231,15 +222,27 @@ func (c *Client) sendGroupMessage(msg protocol.Message) {
 		Content:    msg.Content,
 		Type:       msg.Type,
 		Media:      msg.Media,
+		Model: models.Model{
+			CreatedAt: time.Now(),
+		},
 	}
 
-	// 发送到 Kafka，由 Consumer 处理群发
+	// 2. 发送到 Kafka GroupMsg Topic
 	value, _ := json.Marshal(dbMsg)
 	kafkaMsg := &sarama.ProducerMessage{
 		Topic: global.KTopic.GroupMsg,
 		Value: sarama.ByteEncoder(value),
 	}
-	global.KafkaProducer.SendMessage(kafkaMsg)
+	_, _, err = global.KafkaProducer.SendMessage(kafkaMsg)
+	if err != nil {
+		global.Log.Error("send group message to kafka failed", zap.Error(err))
+		return
+	}
+
+	// 3. [Direct Push] 成功投递到 Kafka 后，直接推送给群成员
+	// 注意：群聊涉及成员列表查询，如果成员很多(>500)，建议还是走 Pub/Sub 广播
+	// 这里我们选择通过 Redis Pub/Sub 广播给所有 Server 实例，让各实例推送给自己的连接
+	PublishPushConsumer(dbMsg, true)
 }
 
 func (c *Client) sendSignalMessage(msg protocol.Message) {

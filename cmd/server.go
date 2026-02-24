@@ -24,8 +24,8 @@ var serverCmd = &cobra.Command{
 
 		// service.StartConsumer() // Consumer moved to separate microservice
 		global.Log.Info("Starting Redis Push Listener...")
-		service.StartPushListener()     // Start Redis Pub/Sub listener for push notifications
-		service.StartBatchPersister()   // 启动消息批量持久化协程
+		service.StartPushListener() // Start Redis Pub/Sub listener for push notifications
+		// service.StartBatchPersister()   // [Deprecated] 废弃 Redis Queue 模式，改用全量 Kafka
 
 		// 自动迁移 (Auto Migrate)
 		if err := global.DB.AutoMigrate(

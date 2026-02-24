@@ -205,9 +205,20 @@ func runBurst(u *BenchUser) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for i := 0; i < msgCount; i++ {
-		<-ticker.C
-		sendMsg(u, i)
+	hbTicker := time.NewTicker(30 * time.Second)
+	defer hbTicker.Stop()
+
+	for i := 0; i < msgCount; {
+		select {
+		case <-hbTicker.C:
+			u.Conn.WriteJSON(protocol.Message{
+				Type:    protocol.TypeHeartbeat,
+				Content: "ping",
+			})
+		case <-ticker.C:
+			sendMsg(u, i)
+			i++
+		}
 	}
 }
 
@@ -215,13 +226,24 @@ func runSustain(u *BenchUser) {
 	endTime := time.Now().Add(duration)
 	msgIdx := 0
 
-	for time.Now().Before(endTime) {
-		// 随机思考时间
-		thinkTime := minThink + time.Duration(rand.Int63n(int64(maxThink-minThink)))
-		time.Sleep(thinkTime)
+	hbTicker := time.NewTicker(30 * time.Second)
+	defer hbTicker.Stop()
 
-		sendMsg(u, msgIdx)
-		msgIdx++
+	for time.Now().Before(endTime) {
+		select {
+		case <-hbTicker.C:
+			u.Conn.WriteJSON(protocol.Message{
+				Type:    protocol.TypeHeartbeat,
+				Content: "ping",
+			})
+		default:
+			// 随机思考时间
+			thinkTime := minThink + time.Duration(rand.Int63n(int64(maxThink-minThink)))
+			time.Sleep(thinkTime)
+
+			sendMsg(u, msgIdx)
+			msgIdx++
+		}
 	}
 }
 
