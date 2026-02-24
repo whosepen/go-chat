@@ -171,39 +171,25 @@ func (c *Client) sendSingleMessage(msg protocol.Message) {
 		Content:    msg.Content,
 		Type:       msg.Type,
 		Media:      msg.Media,
+		Model: models.Model{
+			CreatedAt: time.Now(), // 必须显式设置时间，因为不再经过DB自动生成
+		},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// if ok := repository.NewRelationRepository().IsFriend(ctx, c.UserID, msg.TargetID); !ok {
-	// 	global.Log.Info("消息被对方拒收")
-	// 	return
-	// }
 
-	// 1. 直接入库
-	if err := global.DB.WithContext(ctx).Create(&dbMsg).Error; err != nil {
-		global.Log.Error("save message failed", zap.Error(err))
+	// 1. 投递到 Redis 待持久化队列 (Async Write Behind)
+	msgBytes, err := json.Marshal(dbMsg)
+	if err != nil {
+		global.Log.Error("marshal message failed", zap.Error(err))
 		return
 	}
-	//
-	//TODO：私聊目前改用直连DB模式，暂时停用Kafka消费者，保留代码作参考
-	/*
-		msgBytes, err := json.Marshal(dbMsg)
-		if err != nil {
-			global.Log.Error("marshal message failed", zap.Error(err))
-			return
-		}
-
-		// 投递到 Kafka
-		kafkaMsg := &sarama.ProducerMessage{
-			Topic: global.KTopic.ChatMsg,
-			Value: sarama.ByteEncoder(msgBytes),
-		}
-		_, _, err = global.KafkaProducer.SendMessage(kafkaMsg)
-		if err != nil {
-			global.Log.Error("send message to kafka failed", zap.Error(err))
-		}
-	*/
+	if err := global.RDB.LPush(ctx, PersistQueue, msgBytes).Err(); err != nil {
+		global.Log.Error("push message to persist queue failed", zap.Error(err))
+		// 如果 Redis 写失败，可以考虑降级写 DB 或报错
+		return
+	}
 
 	// 2. 更新 Redis 缓存 (RPush + LTrim)
 	key := generateKey(dbMsg.FromUserID, dbMsg.ToUserID, false)

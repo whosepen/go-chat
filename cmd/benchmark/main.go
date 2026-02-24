@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,33 +20,61 @@ import (
 
 // 配置参数
 var (
-	apiHost     string
-	wsHost      string
-	userCount   int
-	msgCount    int
-	interval    time.Duration
-	timeout     time.Duration
-	msgContent  string
+	// 基础配置
+	apiHost    string
+	wsHost     string
+	userCount  int
+	msgContent string
+	timeout    time.Duration
+
+	// 模式配置
+	mode string // "burst" (洪峰) or "sustain" (持续)
+
+	// Burst 模式参数
+	msgCount int           // 每个用户发送多少条
+	interval time.Duration // 发送间隔
+
+	// Sustain 模式参数
+	duration time.Duration // 压测持续时间
+	minThink time.Duration // 最小思考时间
+	maxThink time.Duration // 最大思考时间
+
 	targetUsers []uint // 存储所有注册用户的ID
 )
 
 // 统计指标
-var (
-	sentCount     int64
-	recvCount     int64
-	errCount      int64
-	totalLatency  int64 // 累计延迟 (ms)
-	latencyCounts int64 // 延迟统计次数
-)
+type Stats struct {
+	SentCount int64
+	RecvCount int64
+	ErrCount  int64
+	Latencies []int64 // 毫秒
+	Lock      sync.Mutex
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+var stats = Stats{
+	Latencies: make([]int64, 0, 100000),
+}
 
 func init() {
 	flag.StringVar(&apiHost, "api", "http://localhost:8080", "API Server address")
 	flag.StringVar(&wsHost, "ws", "ws://localhost:8080", "WebSocket Server address")
+	flag.StringVar(&mode, "mode", "burst", "Benchmark mode: 'burst' (fixed count) or 'sustain' (fixed duration)")
+
 	flag.IntVar(&userCount, "u", 50, "Number of concurrent users")
-	flag.IntVar(&msgCount, "n", 20, "Messages per user")
-	flag.DurationVar(&interval, "i", 100*time.Millisecond, "Send interval")
-	flag.DurationVar(&timeout, "t", 30*time.Second, "Timeout duration")
 	flag.StringVar(&msgContent, "msg", "bench_msg", "Message content prefix")
+	flag.DurationVar(&timeout, "t", 30*time.Second, "Timeout for reading responses")
+
+	// Burst args
+	flag.IntVar(&msgCount, "n", 20, "[Burst] Messages per user")
+	flag.DurationVar(&interval, "i", 100*time.Millisecond, "[Burst] Fixed send interval")
+
+	// Sustain args
+	flag.DurationVar(&duration, "d", 60*time.Second, "[Sustain] Test duration")
+	flag.DurationVar(&minThink, "min-think", 1*time.Second, "[Sustain] Min think time between msgs")
+	flag.DurationVar(&maxThink, "max-think", 5*time.Second, "[Sustain] Max think time between msgs")
+
 	flag.Parse()
 }
 
@@ -58,18 +87,27 @@ type BenchUser struct {
 }
 
 func main() {
-	log.Println("Starting Benchmark...")
-	log.Printf("Target: %s (API), %s (WS)\n", apiHost, wsHost)
-	log.Printf("Users: %d, Msgs/User: %d, Interval: %v\n", userCount, msgCount, interval)
+	log.Println("==================================================")
+	log.Println("      Go-Chat Benchmark Tool v2.0")
+	log.Println("==================================================")
+	log.Printf("Target:   API=%s, WS=%s", apiHost, wsHost)
+	log.Printf("Users:    %d", userCount)
+	log.Printf("Mode:     %s", mode)
+
+	if mode == "burst" {
+		log.Printf("Config:   %d msgs/user, interval=%v", msgCount, interval)
+	} else {
+		log.Printf("Config:   Duration=%v, ThinkTime=%v-%v", duration, minThink, maxThink)
+	}
+	log.Println("--------------------------------------------------")
 
 	users := make([]*BenchUser, userCount)
 	targetUsers = make([]uint, 0, userCount)
 
 	// 1. 注册并登录所有用户
-	log.Println("Phase 1: Register and Login...")
+	log.Println("[Phase 1] Register and Login...")
 	var wg sync.WaitGroup
-	// 限制并发注册，避免瞬间压垮数据库
-	sem := make(chan struct{}, 10)
+	sem := make(chan struct{}, 10) // 限制并发登录数
 
 	for i := 0; i < userCount; i++ {
 		wg.Add(1)
@@ -83,22 +121,18 @@ func main() {
 				Password: "password123",
 			}
 
-			// 注册 (忽略错误，可能已存在)
 			register(u)
-
-			// 登录并获取ID
 			if err := loginAndGetID(u); err != nil {
 				log.Printf("User %s login failed: %v", u.Username, err)
-				atomic.AddInt64(&errCount, 1)
+				atomic.AddInt64(&stats.ErrCount, 1)
 				return
 			}
-
 			users[idx] = u
 		}(i)
 	}
 	wg.Wait()
 
-	// 收集成功登录的用户ID
+	// 过滤失败用户
 	validUsers := make([]*BenchUser, 0, userCount)
 	for _, u := range users {
 		if u != nil && u.ID > 0 {
@@ -107,32 +141,32 @@ func main() {
 		}
 	}
 	users = validUsers
-	log.Printf("Successfully logged in %d users", len(users))
+	log.Printf(">> Active Users: %d", len(users))
 
 	if len(users) < 2 {
 		log.Fatal("Need at least 2 users to test P2P messaging")
 	}
 
 	// 2. 建立 WebSocket 连接
-	log.Println("Phase 2: Connect WebSockets...")
+	log.Println("[Phase 2] Connect WebSockets...")
 	for _, u := range users {
 		wg.Add(1)
 		go func(user *BenchUser) {
 			defer wg.Done()
 			if err := connectWS(user); err != nil {
 				log.Printf("User %s WS connect failed: %v", user.Username, err)
-				atomic.AddInt64(&errCount, 1)
+				atomic.AddInt64(&stats.ErrCount, 1)
 			}
 		}(u)
 	}
 	wg.Wait()
-	log.Println("All WebSockets connected.")
+	log.Println(">> All WebSockets connected.")
 
 	// 3. 开始压测
-	log.Println("Phase 3: Sending Messages...")
-	start := time.Now()
+	log.Println("[Phase 3] Running Benchmark...")
+	stats.StartTime = time.Now()
 
-	// 启动接收协程 (不计入 WaitGroup，它们一直运行直到超时或程序结束)
+	// 启动接收协程
 	for _, u := range users {
 		if u.Conn != nil {
 			go readLoop(u)
@@ -140,42 +174,172 @@ func main() {
 	}
 
 	// 启动发送协程
+	sendWg := sync.WaitGroup{}
 	for _, u := range users {
 		if u.Conn != nil {
-			wg.Add(1)
+			sendWg.Add(1)
 			go func(user *BenchUser) {
-				defer wg.Done()
-				writeLoop(user)
+				defer sendWg.Done()
+				if mode == "burst" {
+					runBurst(user)
+				} else {
+					runSustain(user)
+				}
 			}(u)
 		}
 	}
 
-	wg.Wait() // 等待所有发送完成
-	sendDuration := time.Since(start)
-	log.Printf("All messages sent in %v. Waiting %v for responses...", sendDuration, timeout)
+	sendWg.Wait()
+	sendDuration := time.Since(stats.StartTime)
+	log.Printf(">> Sending finished in %v. Waiting %v for lingering messages...", sendDuration, timeout)
 
-	// 等待一段时间让消息到达接收方
+	// 等待一段时间让消息到达
 	time.Sleep(5 * time.Second)
+	stats.EndTime = time.Now()
 
-	// 4. 统计结果
-	log.Println("--------------------------------------------------")
-	log.Printf("Benchmark Report")
-	log.Printf("--------------------------------------------------")
-	log.Printf("Total Sent:   %d", atomic.LoadInt64(&sentCount))
-	log.Printf("Total Recv:   %d", atomic.LoadInt64(&recvCount))
-	log.Printf("Total Errors: %d", atomic.LoadInt64(&errCount))
-
-	tps := float64(atomic.LoadInt64(&sentCount)) / sendDuration.Seconds()
-	log.Printf("TPS (Send):   %.2f msg/s", tps)
-
-	avgLatency := float64(0)
-	count := atomic.LoadInt64(&latencyCounts)
-	if count > 0 {
-		avgLatency = float64(atomic.LoadInt64(&totalLatency)) / float64(count)
-	}
-	log.Printf("Avg Latency:  %.2f ms", avgLatency)
-	log.Println("--------------------------------------------------")
+	// 4. 输出报告
+	printReport(sendDuration)
 }
+
+func runBurst(u *BenchUser) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for i := 0; i < msgCount; i++ {
+		<-ticker.C
+		sendMsg(u, i)
+	}
+}
+
+func runSustain(u *BenchUser) {
+	endTime := time.Now().Add(duration)
+	msgIdx := 0
+
+	for time.Now().Before(endTime) {
+		// 随机思考时间
+		thinkTime := minThink + time.Duration(rand.Int63n(int64(maxThink-minThink)))
+		time.Sleep(thinkTime)
+
+		sendMsg(u, msgIdx)
+		msgIdx++
+	}
+}
+
+func sendMsg(u *BenchUser, seq int) {
+	// 随机选择接收者
+	targetID := u.ID
+	for targetID == u.ID {
+		targetID = targetUsers[rand.Intn(len(targetUsers))]
+	}
+
+	payload := BenchMsgPayload{
+		Timestamp: time.Now().UnixMilli(),
+		Content:   fmt.Sprintf("%s-%d-%d", msgContent, u.ID, seq),
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	msg := protocol.Message{
+		Type:     protocol.TypeSingleMsg,
+		TargetID: targetID,
+		Content:  string(payloadBytes),
+	}
+
+	if err := u.Conn.WriteJSON(msg); err != nil {
+		atomic.AddInt64(&stats.ErrCount, 1)
+		return
+	}
+	atomic.AddInt64(&stats.SentCount, 1)
+}
+
+func readLoop(u *BenchUser) {
+	defer func() {
+		if u.Conn != nil {
+			u.Conn.Close()
+		}
+	}()
+
+	for {
+		u.Conn.SetReadDeadline(time.Now().Add(timeout))
+		_, message, err := u.Conn.ReadMessage()
+		if err != nil {
+			return
+		}
+
+		var reply protocol.Reply
+		if err := json.Unmarshal(message, &reply); err != nil {
+			continue
+		}
+
+		if reply.Type != protocol.TypeSingleMsg {
+			continue
+		}
+
+		now := time.Now().UnixMilli()
+		atomic.AddInt64(&stats.RecvCount, 1)
+
+		var payload BenchMsgPayload
+		if err := json.Unmarshal([]byte(reply.Content), &payload); err == nil && payload.Timestamp > 0 {
+			latency := now - payload.Timestamp
+			if latency >= 0 {
+				stats.Lock.Lock()
+				stats.Latencies = append(stats.Latencies, latency)
+				stats.Lock.Unlock()
+			}
+		}
+	}
+}
+
+func printReport(duration time.Duration) {
+	log.Println("==================================================")
+	log.Println("            Benchmark Report")
+	log.Println("==================================================")
+
+	sent := atomic.LoadInt64(&stats.SentCount)
+	recv := atomic.LoadInt64(&stats.RecvCount)
+	errs := atomic.LoadInt64(&stats.ErrCount)
+
+	// QPS Calculation
+	qpsSend := float64(sent) / duration.Seconds()
+	qpsRecv := float64(recv) / duration.Seconds() // Note: Recv duration is technically longer
+
+	log.Printf("Time Elapsed:  %v", duration)
+	log.Printf("Total Sent:    %d", sent)
+	log.Printf("Total Recv:    %d", recv)
+	log.Printf("Total Errors:  %d", errs)
+	log.Printf("Loss Rate:     %.2f%%", (1.0-float64(recv)/float64(sent))*100)
+	log.Println("--------------------------------------------------")
+	log.Printf("QPS (Send):    %.2f req/s", qpsSend)
+	log.Printf("QPS (Recv):    %.2f req/s", qpsRecv)
+	log.Println("--------------------------------------------------")
+	log.Println("Latency Distribution (End-to-End):")
+
+	stats.Lock.Lock()
+	latencies := make([]int64, len(stats.Latencies))
+	copy(latencies, stats.Latencies)
+	stats.Lock.Unlock()
+
+	if len(latencies) > 0 {
+		sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+
+		var sum int64
+		for _, l := range latencies {
+			sum += l
+		}
+		avg := float64(sum) / float64(len(latencies))
+
+		log.Printf("  Avg:   %.2f ms", avg)
+		log.Printf("  Min:   %d ms", latencies[0])
+		log.Printf("  Max:   %d ms", latencies[len(latencies)-1])
+		log.Printf("  P50:   %d ms", latencies[int(float64(len(latencies))*0.50)])
+		log.Printf("  P95:   %d ms", latencies[int(float64(len(latencies))*0.95)])
+		log.Printf("  P99:   %d ms", latencies[int(float64(len(latencies))*0.99)])
+	} else {
+		log.Println("  No latency data collected.")
+	}
+	log.Println("==================================================")
+}
+
+// ---------------- Helper Functions (Same as before) ----------------
 
 func register(u *BenchUser) {
 	url := fmt.Sprintf("%s/api/user/register", apiHost)
@@ -246,10 +410,6 @@ func loginAndGetID(u *BenchUser) error {
 }
 
 func connectWS(u *BenchUser) error {
-	// 路径是 /ws?token=xxx (根据你的 router.go 配置，路径是 /ws 而不是 /api/ws)
-	// 如果 router.go 里 protectGroup.GET("/ws", chatApi.Connect) 是在 /api 组下，则路径是 /api/ws
-	// 检查代码： protectGroup := apiGroup.Group("") -> protectGroup.GET("/ws")
-	// 所以路径确实是 /api/ws
 	uStr := fmt.Sprintf("%s/api/ws?token=%s", wsHost, u.Token)
 	conn, _, err := websocket.DefaultDialer.Dial(uStr, nil)
 	if err != nil {
@@ -262,78 +422,4 @@ func connectWS(u *BenchUser) error {
 type BenchMsgPayload struct {
 	Timestamp int64  `json:"ts"`
 	Content   string `json:"content"`
-}
-
-func writeLoop(u *BenchUser) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for i := 0; i < msgCount; i++ {
-		<-ticker.C
-
-		// 随机选择接收者 (不选自己)
-		targetID := u.ID
-		for targetID == u.ID {
-			targetID = targetUsers[rand.Intn(len(targetUsers))]
-		}
-
-		// 构造消息内容，包含时间戳用于计算延迟
-		payload := BenchMsgPayload{
-			Timestamp: time.Now().UnixMilli(),
-			Content:   fmt.Sprintf("%s-%d-%d", msgContent, u.ID, i),
-		}
-		payloadBytes, _ := json.Marshal(payload)
-
-		msg := protocol.Message{
-			Type:     protocol.TypeSingleMsg,
-			TargetID: targetID,
-			Content:  string(payloadBytes),
-		}
-
-		err := u.Conn.WriteJSON(msg)
-		if err != nil {
-			log.Printf("User %d send error: %v", u.ID, err)
-			atomic.AddInt64(&errCount, 1)
-			return
-		}
-		atomic.AddInt64(&sentCount, 1)
-	}
-}
-
-func readLoop(u *BenchUser) {
-	defer func() {
-		if u.Conn != nil {
-			u.Conn.Close()
-		}
-	}()
-
-	for {
-		// 设置读取超时
-		u.Conn.SetReadDeadline(time.Now().Add(timeout))
-		_, message, err := u.Conn.ReadMessage()
-		if err != nil {
-			return
-		}
-
-		var reply protocol.Reply
-		if err := json.Unmarshal(message, &reply); err != nil {
-			continue
-		}
-
-		if reply.Type != protocol.TypeSingleMsg {
-			continue
-		}
-
-		atomic.AddInt64(&recvCount, 1)
-
-		// 计算延迟
-		var payload BenchMsgPayload
-		if err := json.Unmarshal([]byte(reply.Content), &payload); err == nil && payload.Timestamp > 0 {
-			latency := time.Now().UnixMilli() - payload.Timestamp
-			if latency > 0 {
-				atomic.AddInt64(&totalLatency, latency)
-				atomic.AddInt64(&latencyCounts, 1)
-			}
-		}
-	}
 }
