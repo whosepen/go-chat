@@ -118,8 +118,11 @@ go run cmd/server.go
 
 ### 4. 运行压测 (可选)
 ```bash
-# 模拟 1000 用户并发测试
-go run cmd/benchmark/main.go -mode burst -u 1000 -n 10
+# 1. 洪峰测试 (Burst Mode) 模拟 100 个用户，每人快速发送 50 条消息，间隔 50ms。
+go run cmd/benchmark/main.go -mode burst -u 100 -n 50 -i 50ms
+
+# 2. 持续稳定性测试 (Sustain Mode) 模拟 200 用户在线，随机间隔发送，持续 2 分钟。每个用户在 min-think 到 max-think 之间随机间隔发送消息。
+go run cmd/benchmark/main.go -mode sustain -u 200 -i 100ms -d 2m -min-think 1s -max-think 5s
 ```
 
 ---
