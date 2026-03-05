@@ -7,7 +7,7 @@
 基于 **Go + Gin + MySQL + Redis + Kafka + WebSocket** 构建的高性能分布式即时通讯系统。
 本项目已完成 **v2.0 架构重构**，实现了全链路 Kafka 消息驱动、Redis Stream 群消息漫游及千万级并发支撑能力。
 
-👉 前端项目仓库：[github.com/whosepen/go-chat-web](https://github.com/whosepen/go-chat-web)
+👉 前端仓库：[github.com/whosepen/go-chat-web](https://github.com/whosepen/go-chat-web)
 
 ---
 

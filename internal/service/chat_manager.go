@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -165,7 +166,23 @@ func (c *Client) HandleMessage(msg protocol.Message) {
 }
 
 func (c *Client) sendSingleMessage(msg protocol.Message) {
+	// 验证好友关系 (Cache-Aside)
+	repo := repository.NewRelationRepository()
+	if !repo.IsFriendCached(context.Background(), c.UserID, msg.TargetID) {
+		// 非好友，发送系统通知
+		reply := protocol.Reply{
+			FromID:   0, // System ID
+			Content:  "发送失败，你们还不是好友",
+			Type:     protocol.TypeSingleMsg, // 借用单聊类型，前端需根据FromID=0特殊处理
+			SendTime: time.Now().Unix(),
+		}
+		replyBytes, _ := json.Marshal(reply)
+		c.Send <- replyBytes
+		return
+	}
+
 	dbMsg := models.Message{
+		MsgID:      uuid.NewString(), // 生成唯一ID
 		FromUserID: c.UserID,
 		ToUserID:   msg.TargetID,
 		Content:    msg.Content,
@@ -217,6 +234,7 @@ func (c *Client) sendGroupMessage(msg protocol.Message) {
 	}
 
 	dbMsg := models.Message{
+		MsgID:      uuid.NewString(), // 生成唯一ID
 		FromUserID: c.UserID,
 		ToUserID:   msg.TargetID, // ToUserID 存储群ID
 		Content:    msg.Content,

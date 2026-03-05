@@ -115,6 +115,8 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 				if err := tx.Save(&friendReq).Error; err != nil {
 					return err
 				}
+				// 缓存失效
+				repository.NewRelationRepository().InvalidateRelationCache(ctx, friendReq.SenderID, friendReq.ReceiverID)
 				return nil
 			}
 
@@ -170,6 +172,8 @@ func HandleFriendRequest(ctx context.Context, userID uint, req HandleFriendReque
 			}
 		}
 
+		// 缓存失效
+		repository.NewRelationRepository().InvalidateRelationCache(ctx, friendReq.SenderID, friendReq.ReceiverID)
 		return nil
 	})
 }
@@ -337,6 +341,9 @@ func DeleteFriend(ctx context.Context, userID uint, targetID uint) error {
 		Where("owner_id = ? AND target_id = ?", targetID, userID).Delete(&rel)
 	global.DB.WithContext(ctx).Model(&rel).
 		Where("owner_id = ? AND target_id = ?", userID, targetID).Delete(&rel)
+
+	// 缓存失效
+	repository.NewRelationRepository().InvalidateRelationCache(ctx, userID, targetID)
 	return nil
 }
 
@@ -350,6 +357,8 @@ func BlockFriend(ctx context.Context, userID uint, targetID uint) error {
 			Update("type", 2).Error; err != nil {
 			return err
 		}
+		// 缓存失效
+		repository.NewRelationRepository().InvalidateRelationCache(ctx, userID, targetID)
 		return nil
 	}
 	return ErrIsNotFriend
@@ -365,6 +374,8 @@ func UnblockFriend(ctx context.Context, userID uint, targetID uint) error {
 			Update("type", 1).Error; err != nil {
 			return err
 		}
+		// 缓存失效
+		repository.NewRelationRepository().InvalidateRelationCache(ctx, userID, targetID)
 		return nil
 	} else {
 		return err

@@ -82,8 +82,10 @@ type BenchUser struct {
 	ID       uint
 	Username string
 	Password string
-	Token    string
-	Conn     *websocket.Conn
+	Token     string
+	Conn      *websocket.Conn
+	FriendIDs []uint
+	Lock      sync.Mutex
 }
 
 func main() {
@@ -147,7 +149,11 @@ func main() {
 		log.Fatal("Need at least 2 users to test P2P messaging")
 	}
 
-	// 2. 建立 WebSocket 连接
+	// 2. 建立好友关系 (Ring Topology)
+	log.Println("[Phase 1.5] Establishing Friendships (Ring Topology)...")
+	setupRelations(users)
+
+	// 3. 建立 WebSocket 连接
 	log.Println("[Phase 2] Connect WebSockets...")
 	for _, u := range users {
 		wg.Add(1)
@@ -162,7 +168,7 @@ func main() {
 	wg.Wait()
 	log.Println(">> All WebSockets connected.")
 
-	// 3. 开始压测
+	// 4. 开始压测
 	log.Println("[Phase 3] Running Benchmark...")
 	stats.StartTime = time.Now()
 
@@ -197,7 +203,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 	stats.EndTime = time.Now()
 
-	// 4. 输出报告
+	// 5. 输出报告
 	printReport(sendDuration)
 }
 
@@ -248,11 +254,12 @@ func runSustain(u *BenchUser) {
 }
 
 func sendMsg(u *BenchUser, seq int) {
-	// 随机选择接收者
-	targetID := u.ID
-	for targetID == u.ID {
-		targetID = targetUsers[rand.Intn(len(targetUsers))]
+	if len(u.FriendIDs) == 0 {
+		return
 	}
+
+	// 随机选择一个好友
+	targetID := u.FriendIDs[rand.Intn(len(u.FriendIDs))]
 
 	payload := BenchMsgPayload{
 		Timestamp: time.Now().UnixMilli(),
@@ -444,4 +451,235 @@ func connectWS(u *BenchUser) error {
 type BenchMsgPayload struct {
 	Timestamp int64  `json:"ts"`
 	Content   string `json:"content"`
+}
+
+// ---------------- Friendship Helpers ----------------
+
+func setupRelations(users []*BenchUser) {
+	var wg sync.WaitGroup
+	// Limit concurrency for API calls
+	sem := make(chan struct{}, 20)
+
+	// 1. Load existing friends
+	log.Println("Loading existing friends...")
+	for _, u := range users {
+		wg.Add(1)
+		go func(user *BenchUser) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			if err := loadFriends(user); err != nil {
+				log.Printf("Failed to load friends for %s: %v", user.Username, err)
+			}
+		}(u)
+	}
+	wg.Wait()
+
+	// 2. Ensure Ring Topology
+	log.Println("Ensuring ring topology...")
+	count := len(users)
+	for i := 0; i < count; i++ {
+		u1 := users[i]
+		u2 := users[(i+1)%count]
+
+		// Check if u2 is already a friend of u1
+		isFriend := false
+		u1.Lock.Lock()
+		for _, fid := range u1.FriendIDs {
+			if fid == u2.ID {
+				isFriend = true
+				break
+			}
+		}
+		u1.Lock.Unlock()
+
+		if !isFriend {
+			wg.Add(1)
+			go func(u1, u2 *BenchUser) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				if err := makeFriends(u1, u2); err != nil {
+					log.Printf("Failed to make friends %s <-> %s: %v", u1.Username, u2.Username, err)
+				}
+			}(u1, u2)
+		}
+	}
+	wg.Wait()
+}
+
+func loadFriends(u *BenchUser) error {
+	url := fmt.Sprintf("%s/api/friend/list", apiHost)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+u.Token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	var res struct {
+		Code int `json:"code"`
+		Data []struct {
+			ID uint `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &res); err != nil {
+		return err
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("api code %d", res.Code)
+	}
+
+	u.Lock.Lock()
+	u.FriendIDs = make([]uint, 0, len(res.Data))
+	for _, f := range res.Data {
+		u.FriendIDs = append(u.FriendIDs, f.ID)
+	}
+	u.Lock.Unlock()
+	return nil
+}
+
+func makeFriends(u1, u2 *BenchUser) error {
+	// 1. u1 sends request to u2
+	err := sendFriendRequest(u1, u2.ID)
+	if err != nil {
+		// If already friend, we can just update local cache and return
+		if err.Error() == "already_friend" {
+			u1.Lock.Lock()
+			u1.FriendIDs = append(u1.FriendIDs, u2.ID)
+			u1.Lock.Unlock()
+			
+			u2.Lock.Lock()
+			u2.FriendIDs = append(u2.FriendIDs, u1.ID)
+			u2.Lock.Unlock()
+			return nil
+		}
+		return fmt.Errorf("send request failed: %w", err)
+	}
+
+	// 2. u2 gets pending requests
+	reqID, err := getFriendRequestID(u2, u1.ID)
+	if err != nil {
+		return fmt.Errorf("get request failed: %w", err)
+	}
+
+	// 3. u2 accepts request
+	if err := handleFriendRequest(u2, reqID, 1); err != nil {
+		return fmt.Errorf("accept request failed: %w", err)
+	}
+
+	// Update local cache
+	u1.Lock.Lock()
+	u1.FriendIDs = append(u1.FriendIDs, u2.ID)
+	u1.Lock.Unlock()
+
+	u2.Lock.Lock()
+	u2.FriendIDs = append(u2.FriendIDs, u1.ID)
+	u2.Lock.Unlock()
+	return nil
+}
+
+func sendFriendRequest(u *BenchUser, targetID uint) error {
+	url := fmt.Sprintf("%s/api/friend/request", apiHost)
+	body := map[string]interface{}{
+		"target_id": targetID,
+		"remark":    "bench_add",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+u.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	var res struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := json.Unmarshal(bodyBytes, &res); err != nil {
+		return err
+	}
+
+	if res.Code != 0 {
+		if res.Msg == "你们已经是好友了" {
+			return fmt.Errorf("already_friend")
+		}
+		if res.Msg == "已发送过申请，请等待对方处理" {
+			return nil // Proceed to accept
+		}
+		return fmt.Errorf("api code %d: %s", res.Code, res.Msg)
+	}
+	return nil
+}
+
+func getFriendRequestID(u *BenchUser, senderID uint) (uint, error) {
+	// Retry a few times because of async processing or latency
+	for i := 0; i < 10; i++ {
+		url := fmt.Sprintf("%s/api/friend/requests", apiHost)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("Authorization", "Bearer "+u.Token)
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var res struct {
+			Code int `json:"code"`
+			Data []struct {
+				ID       uint `json:"id"`
+				SenderID uint `json:"sender_id"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(bodyBytes, &res); err != nil {
+			return 0, err
+		}
+
+		for _, r := range res.Data {
+			if r.SenderID == senderID {
+				return r.ID, nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return 0, fmt.Errorf("request not found")
+}
+
+func handleFriendRequest(u *BenchUser, reqID uint, action int) error {
+	url := fmt.Sprintf("%s/api/friend/handle", apiHost)
+	body := map[string]interface{}{
+		"request_id": reqID,
+		"action":     action,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Authorization", "Bearer "+u.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
 }

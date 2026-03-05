@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"go-chat/global"
 	"go-chat/internal/models"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/redis/go-redis/v9" // Import redis
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 func StartConsumer() {
@@ -115,8 +117,15 @@ func handlePrivateMessage(value []byte) error {
 		err := global.DB.Create(&dbMsg).Error
 		if err == nil {
 			// 写入成功
-			// 注意：根据新架构，私聊不再写入 Redis 缓存
-			// 也不需要 Push，因为 API Server 发送成功时已经 Push 了
+			return nil
+		}
+		// 唯一键冲突 (幂等性处理)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			global.Log.Warn("message duplicate consumption", zap.String("msg_id", dbMsg.MsgID))
+			return nil
+		}
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			global.Log.Warn("group message duplicate consumption", zap.String("msg_id", dbMsg.MsgID))
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
