@@ -27,7 +27,7 @@
 
 ![Sustain Mode](pic/sustain10k2m.png)
 *   **QPS**: ~3,200+
-*   **P99 Latency**: **8ms** (日常运行极致丝滑)
+*   **P99 Latency**: **43ms** (日常运行极致丝滑)
 
 ---
 
